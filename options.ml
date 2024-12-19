@@ -1,4 +1,4 @@
-let help_msg = "control flow graph computation and display"
+let help_msg = "pluscal transpilation"
 
 module Self = Plugin.Register
   (struct
