@@ -67,15 +67,10 @@ let stmt_to_str = function
 
 let rec pc_of_exp = function
   | Const c -> Result.map (fun pc_cst -> PCst pc_cst) (pc_of_cst c)
-  | Lval lval -> (match lval_is_ptr lval with
-                        |Ok (bool,vname) ->
-                          if bool then
-                            Result.ok (PPtr(vname))
-                          else
-                            Result.ok (PLoad(vname))
-                        |Error e -> Error e)
+  | Lval lval -> Result.map (fun (bool,vname) ->
+                        (if bool then PPtr(vname) else PLoad(vname))) (lval_is_ptr lval)
   | UnOp (u,e, _) -> Result.bind (pc_of_unop u) (fun pc_unop ->
-                                Result.map (fun pc_exp -> PUnop(pc_unop,pc_exp)) (pc_of_exp e.enode))
+                                  Result.map (fun pc_exp -> PUnop(pc_unop,pc_exp)) (pc_of_exp e.enode))
   | BinOp (b, e1, e2, _) -> Result.bind (pc_of_binop b) (fun pc_binop ->
                                                     Result.bind (pc_of_exp e1.enode) (fun pc_exp1 ->
                                                       Result.map (fun pc_exp2 -> PBinop(pc_binop,pc_exp1,pc_exp2)) (pc_of_exp e2.enode)))
@@ -91,7 +86,7 @@ let rec pc_of_exp = function
   | AlignOfE e -> ()
   | StartOf lval -> () *)
 
-(* Return true if lval is a pointer in pluscal, false otherwise (\*ptr -> false), return also var or ptr name*)
+(* Return true if lval is considered a pointer in pluscal, false otherwise (\*ptr -> false), return also var or ptr name*)
 and lval_is_ptr (l: lval) =
   match fst l with
       |Var vinfo -> (match vinfo.vtype with |TPtr _ -> Result.ok (true,(vinfo.vorig_name,vinfo.vglob)) |_ -> Result.ok (false,(vinfo.vorig_name,vinfo.vglob)))
@@ -100,27 +95,36 @@ and lval_is_ptr (l: lval) =
                           |Ok PPtr(ptr_info) -> Result.ok (false,ptr_info)
                           |_ -> Result.error "Lval Mem access should be ptr\n")
 
+let rec init_to_pc_expr (i: init option) =
+  match i with
+    |None -> PUndef
+    |Some init -> match init with
+                    |CompoundInit _ -> struct_to_pc_expr init
+                    |SingleInit e -> match pc_of_exp e.enode with
+                                      |Error _ -> PUndef
+                                      |Ok ok_exp -> ok_exp
+
+and struct_to_pc_expr (i: init) =
+  match i with
+  |CompoundInit (_,l) ->
+      let record_result =
+        fold_left_result l (fun (offs,i) ->
+        (match offs with
+          |Field(f,_) -> Result.ok (f.fname,init_to_pc_expr (Some i))
+          |Index(_) -> Result.error "Index offset not treated"
+          |_ -> Result.error "Offset should be Field or Index"))
+      in (match record_result with
+            |Error _ -> PUndef
+            |Ok ok_record -> PCst(PRecord(ok_record)))
+  |_ -> PUndef
+
 (* Return Error if an error occurs in one exp of the list, OK(exp_list) , with exp_list list of pc_expr *)
-let pc_of_exp_list l = List.fold_left (fun acc exp ->
-                      match acc with
-                      | Error e -> Error e
-                      | Ok ok_acc -> (
-                          match pc_of_exp exp.enode with
-                          | Error e -> Error e
-                          | Ok ok_exp -> Ok (ok_exp :: ok_acc))) (Ok []) l
+let pc_of_exp_list l = fold_left_result l (fun e -> pc_of_exp e.enode)
 
 let pc_of_instr = function
-  | Set(lval, e, _) -> let pc_exp = pc_of_exp e.enode in
-                                                (match pc_exp with
-                                                  |Ok ok_exp ->
-                                                    (match lval_is_ptr lval with
-                                                      |Ok (bool,vname) ->
-                                                        if bool then
-                                                          Result.ok ([PStorePtr(ok_exp,vname)])
-                                                        else
-                                                          Result.ok ([PStore(ok_exp,vname)])
-                                                      |Error e -> Error e)
-                                                  |Error e -> Error e)
+  | Set(lval, e, _) -> Result.bind (pc_of_exp e.enode) (fun pc_exp ->
+                                    Result.map (fun (bool,vname) ->
+                                      if bool then ([PStorePtr(pc_exp,vname)]) else ([PStore(pc_exp,vname)])) (lval_is_ptr lval))
   | Call(lval_opt, e, e_list, _) ->
     (match pc_of_exp_list e_list with
       |Error e -> Error e
@@ -146,7 +150,8 @@ let pc_of_instr = function
                                                   |TPtr _ -> Result.ok ([PStorePtr(ok_exp,(vinfo.vorig_name,vinfo.vglob))])
                                                   |_ -> Result.ok ([PStore(ok_exp,(vinfo.vorig_name,vinfo.vglob))]))
                                                 |Error e -> Error e)
-                            |CompoundInit _ -> Result.error "Compound Init not treated")
+                            |CompoundInit _ -> let record = struct_to_pc_expr init in
+                                                 Result.ok ([PStore(record,(vinfo.vorig_name,vinfo.vglob))]))
       |ConsInit (finfo, args, _) -> (match pc_of_exp_list args with
                                       |Error e -> Error e
                                       |Ok pc_args_list -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
@@ -159,11 +164,11 @@ let pc_of_instr = function
 let rec pc_of_stmt = function
   | Instr i -> pc_of_instr i
   | Return (r,_) -> (match r with
-                                            |Some e -> let pc_exp = pc_of_exp e.enode in
-                                                        (match pc_exp with
-                                                          |Ok ok_exp -> Result.ok [PReturn(ok_exp)]
-                                                          |Error e -> Error e)
-                                            |None -> Result.ok [])
+                                    |Some e -> let pc_exp = pc_of_exp e.enode in
+                                                (match pc_exp with
+                                                  |Ok ok_exp -> Result.ok [PReturn(ok_exp)]
+                                                  |Error e -> Error e)
+                                    |None -> Result.ok [])
   | Goto (r,_) -> Result.ok [PGoto(Pretty_utils.to_string Printer.pp_label (List.hd (!r).labels))]
   | If (e,b1,b2,_) -> (match pc_of_exp e.enode with
                                                     |Error err -> Error err
@@ -182,13 +187,13 @@ let rec pc_of_stmt = function
   | Continue l -> Format.pp_print_string out "continue :"; Printer.pp_location out l; Format.fprintf out "end continue \n";
   | Switch(e,b,stmt_list,loc) -> Format.fprintf out " switch : "; Printer.pp_exp out e; Printer.pp_block out b; List.iter (fun s -> Printer.pp_stmt out s) stmt_list; Printer.pp_location out loc; Format.fprintf out "end switch \n";*)
 
-and pc_of_block b = List.fold_left (fun acc stmt ->
-  match acc with
-  | Error e -> Error e
-  | Ok ok_acc -> (
-      match pc_of_stmt stmt.skind with
-      | Error e -> Error e
-      | Ok ok_stmt -> Ok (ok_acc @ ok_stmt))) (Ok []) b
+and pc_of_block b =
+  List.fold_left (fun acc stmt ->
+    Result.bind acc (fun ok_acc ->
+        Result.bind (pc_of_stmt stmt.skind)
+          (fun ok_stmt ->
+          Result.ok (ok_acc@ok_stmt))))
+  (Result.ok []) b
 
 let rec procedure_push_vars acc (vars: pc_var list) (is_args: bool) =
   match vars with
@@ -201,15 +206,6 @@ let rec procedure_pop acc n =
   match n with
     |0 -> acc
     |_ -> procedure_pop (PPop::acc) (n-1)
-
-let initinfo_to_pc_expr (i: initinfo) =
-  match i.init with
-    |None -> PUndef
-    |Some init -> match init with
-                    |CompoundInit _ -> PUndef
-                    |SingleInit e -> match pc_of_exp e.enode with
-                                      |Error _ -> PUndef
-                                      |Ok ok_exp -> ok_exp
 
 class gen_pc (prog: pc_prog ref) = object
   inherit Visitor.frama_c_inplace
@@ -240,9 +236,11 @@ class gen_pc (prog: pc_prog ref) = object
   method! vglob_aux g =
     match g with
       | GVar(varinfo, initinfo, _) -> prog := {!prog with
-                                          pc_glob_var = (varinfo_to_pcvar varinfo,initinfo_to_pc_expr initinfo)
+                                          pc_glob_var = (varinfo_to_pcvar varinfo,init_to_pc_expr initinfo.init)
                                                         ::(!prog).pc_glob_var;};
                                       Cil.DoChildren
+      | GCompTag(compinfo, _) -> if compinfo.cstruct then Cil.DoChildren
+                                 else (Printf.eprintf "Union not supported"; Cil.DoChildren)
       | GFun(fundec, _) -> let args = List.map (varinfo_to_pcvar) fundec.sformals in
                              let vars = List.map (varinfo_to_pcvar) fundec.slocals in
                              let args_decl = procedure_push_vars [] args true in
@@ -271,7 +269,6 @@ class gen_pc (prog: pc_prog ref) = object
       | GAnnot _ -> Format.fprintf out "GAnnot : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GAnnot \n"; g)
       | GType(typeinfo, loc) -> Format.fprintf out "GType : "; Format.pp_print_string out typeinfo.torig_name; Format.pp_print_string out typeinfo.tname ; Printer.pp_typ out typeinfo.ttype; Format.pp_print_bool out typeinfo.treferenced; Printer.pp_location out loc;
         Cil.DoChildrenPost (fun g -> Format.fprintf out "End GType \n"; g)
-      | GCompTag(compinfo, loc) -> Format.fprintf out "GCompTag : "; Printer.pp_compinfo out compinfo; Printer.pp_location out loc; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GCompTag \n"; g)
       | GCompTagDecl(compinfo, loc) -> Format.fprintf out "GCompTagDecl : "; Printer.pp_compinfo out compinfo; Printer.pp_location out loc; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GCompTagDecl \n"; g)
       | GEnumTag _ -> Format.fprintf out "GEnumTag : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GEnumTag \n"; g)
       | GEnumTagDecl _ -> Format.fprintf out "GEnumTagDecl : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GEnumTagDecl \n"; g)

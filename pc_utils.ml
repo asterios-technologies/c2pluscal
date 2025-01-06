@@ -50,3 +50,12 @@ let remove_last_char s =
       s
     else
       String.sub s 0 (String.length s - 1)
+
+(*Fold f on l = [i1,i2,...,in], with Error if one
+  of f ik = error, and ok([f i1,..., f in]) otherwise*)
+let fold_left_result l f =
+    List.fold_left (fun acc i ->
+        Result.bind acc (fun ok_acc ->
+            Result.bind (f i) (fun ok_i ->
+                Result.ok (ok_acc@[ok_i]))))
+    (Result.ok []) l

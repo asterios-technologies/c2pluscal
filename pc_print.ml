@@ -25,11 +25,17 @@ let print_pc_unop out (u: pc_unop) = match u with
   |PMinus -> Format.fprintf out "PMinus";
   |PNot -> Format.fprintf out "PNot"
 
-let print_pc_cst out (c: pc_cst) = match c with
+let rec print_pc_cst out (c: pc_cst) = match c with
   |PInt(i) -> Format.fprintf out "PInt(%s)" (string_of_int i);
   |PString(s) -> Format.fprintf out "PString(%s)" s
+  |PRecord(l) -> Format.fprintf out "PRecord(";
+                 List.iter (fun (s,pc_exp) ->
+                  Format.fprintf out "%s : " s;
+                  print_pc_expr out pc_exp;
+                  Format.fprintf out ",") l;
+                Format.fprintf out ")";
 
-let rec print_pc_expr out (exp: pc_expr) = match exp with
+and print_pc_expr out (exp: pc_expr) = match exp with
   PCst(cst) -> Format.fprintf out "PCst(";print_pc_cst out cst;Format.fprintf out ")";
   |PPtr((ptr,_)) -> Format.fprintf out "PPtr(%s)" ptr;
   |PBinop(binop,e1,e2) -> Format.fprintf out "PBinop(";print_pc_binop out binop;

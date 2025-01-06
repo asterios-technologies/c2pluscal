@@ -8,7 +8,7 @@ let run() =
                     pc_processus=[];
                     pc_procedures=[]}) in
         Visitor.visitFramacFileSameGlobals (new Pc_gen.gen_pc prog) (Ast.get ());
-        let out_chan = open_out (String.concat "" [(!prog).pc_prog_name;".out"]) in
+        let out_chan = open_out (String.concat "" [(!prog).pc_prog_name;".dump"]) in
         let tla_chan = open_out (String.concat "" [(!prog).pc_prog_name;".tla"]) in
         let cfg_chan = open_out (String.concat "" [(!prog).pc_prog_name;".cfg"]) in
         let out_fmt = Format.formatter_of_out_channel out_chan in

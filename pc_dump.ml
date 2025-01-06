@@ -3,6 +3,11 @@ open Pc_utils
 
 type dump_info = string * string * int * string (* label, proc_name, line, indent_space*)
 
+let dump_proc_var out (proc_name: string) ((v_name,_): pc_var) =
+  Format.fprintf out "    %s = [loc |-> \"stack\", fp |-> Len(my_stack), offs |-> 0];\n" (vname_to_string proc_name v_name)
+
+let dump_arg (proc_name: string) out (v: pc_var) =  Format.fprintf out "%s" (arg_to_string proc_name v)
+
 let dump_pc_binop out (b: pc_binop) = match b with
   PAdd -> Format.fprintf out "+";
   | PSub -> Format.fprintf out "-";
@@ -23,17 +28,17 @@ let dump_pc_unop out (u: pc_unop) = match u with
   |PMinus -> Format.fprintf out "-";
   |PNot -> Format.fprintf out "~"
 
-let dump_pc_cst out (c: pc_cst) = match c with
+let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
   |PInt(i) -> Format.fprintf out "%s" (string_of_int i);
-  |PString(s) -> Format.fprintf out "%s" s
+  |PString(s) -> Format.fprintf out "\"%s\"" s;
+  |PRecord l -> Format.fprintf out "[";
+                dump_list out l (fun out (field_name, exp) ->
+                  Format.fprintf out "%s |-> " field_name;
+                  dump_pc_expr proc_name out exp;);
+                Format.fprintf out "]"
 
-let dump_proc_var out (proc_name: string) ((v_name,_): pc_var) =
-  Format.fprintf out "    %s = [loc |-> \"stack\", fp |-> Len(my_stack), offs |-> 0];\n" (vname_to_string proc_name v_name)
-
-let dump_arg (proc_name: string) out (v: pc_var) =  Format.fprintf out "%s" (arg_to_string proc_name v)
-
-let rec dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
-  PCst(cst) -> dump_pc_cst out cst;
+and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
+  PCst(cst) -> dump_pc_cst proc_name out cst;
   |PPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
   |PBinop(binop,e1,e2) -> (match is_binop_ptr binop with
                             |true ->
