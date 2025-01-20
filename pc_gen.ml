@@ -67,15 +67,14 @@ let stmt_to_str = function
 
 let rec pc_of_exp = function
   | Const c -> Result.map (fun pc_cst -> PCst pc_cst) (pc_of_cst c)
-  | Lval lval -> Result.map (fun (bool,vname) ->
-                        (if bool then PPtr(vname) else PLoad(vname))) (lval_is_ptr lval)
+  | Lval lval -> Result.bind (pc_of_lval lval) (fun pc_lval -> Result.ok (PLoad(pc_lval)))
   | UnOp (u,e, _) -> Result.bind (pc_of_unop u) (fun pc_unop ->
                                   Result.map (fun pc_exp -> PUnop(pc_unop,pc_exp)) (pc_of_exp e.enode))
   | BinOp (b, e1, e2, _) -> Result.bind (pc_of_binop b) (fun pc_binop ->
                                                     Result.bind (pc_of_exp e1.enode) (fun pc_exp1 ->
                                                       Result.map (fun pc_exp2 -> PBinop(pc_binop,pc_exp1,pc_exp2)) (pc_of_exp e2.enode)))
   | AddrOf lval -> (match fst lval with
-                          |Var vinfo -> Result.ok (PPtr(vinfo.vorig_name,vinfo.vglob))
+                          |Var vinfo -> Result.ok (PLoad(PLPtr(vinfo.vorig_name,vinfo.vglob)))
                           |Mem e -> pc_of_exp e.enode)
   | SizeOf _ -> Result.ok (PCst (PInt 1))
   | CastE(_,e) -> pc_of_exp e.enode
@@ -86,14 +85,24 @@ let rec pc_of_exp = function
   | AlignOfE e -> ()
   | StartOf lval -> () *)
 
-(* Return true if lval is considered a pointer in pluscal, false otherwise (\*ptr -> false), return also var or ptr name*)
-and lval_is_ptr (l: lval) =
-  match fst l with
-      |Var vinfo -> (match vinfo.vtype with |TPtr _ -> Result.ok (true,(vinfo.vorig_name,vinfo.vglob)) |_ -> Result.ok (false,(vinfo.vorig_name,vinfo.vglob)))
+(*Converts a Lval into a PlusCal Lval*)
+and pc_of_lval l =
+  match snd l with
+  |NoOffset ->
+    (match fst l with
+        |Var vinfo -> (match vinfo.vtype with |TPtr _ -> Result.ok (PLPtr(vinfo.vorig_name,vinfo.vglob)) |_ -> Result.ok (PLVar((vinfo.vorig_name,vinfo.vglob))))
+        |Mem e -> let pc_exp_mem = pc_of_exp e.enode in
+                        (match pc_exp_mem with
+                            |Ok PLoad(PLPtr(ptr_info)) -> Result.ok (PLVar(ptr_info))
+                            |_ -> Result.error "Lval Mem access should be ptr\n"))
+  |Field(finfo,_) ->
+    (match fst l with
+      |Var vinfo -> Result.ok (PField(finfo.fname,(vinfo.vorig_name,vinfo.vglob)))
       |Mem e -> let pc_exp_mem = pc_of_exp e.enode in
                       (match pc_exp_mem with
-                          |Ok PPtr(ptr_info) -> Result.ok (false,ptr_info)
-                          |_ -> Result.error "Lval Mem access should be ptr\n")
+                          |Ok PLoad(PLPtr(ptr_info)) -> Result.ok (PField(finfo.fname, ptr_info))
+                          |_ -> Result.error "Lval Mem access should be ptr\n"))
+  |Index _ -> Result.error "Index offset not treated"
 
 let rec init_to_pc_expr (i: init option) =
   match i with
@@ -123,22 +132,21 @@ let pc_of_exp_list l = fold_left_result l (fun e -> pc_of_exp e.enode)
 
 let pc_of_instr = function
   | Set(lval, e, _) -> Result.bind (pc_of_exp e.enode) (fun pc_exp ->
-                                    Result.map (fun (bool,vname) ->
-                                      if bool then ([PStorePtr(pc_exp,vname)]) else ([PStore(pc_exp,vname)])) (lval_is_ptr lval))
+                                    Result.bind (pc_of_lval lval) (fun pc_lval ->
+                                      Result.ok ([PStore(pc_exp, pc_lval)])))
   | Call(lval_opt, e, e_list, _) ->
     (match pc_of_exp_list e_list with
       |Error e -> Error e
       |Ok pc_exp_list ->
         let pc_exp = pc_of_exp e.enode in
           (match pc_exp with
-            |Ok PLoad(fname,_) ->
+            |Ok PLoad(PLVar(fname,_)) ->
               (match lval_opt with
-                |Some lval -> (match fst lval with
-                              |Var vinfo -> Result.ok ([PCall(fname, pc_exp_list);
-                                                        PRetAttr((vinfo.vorig_name,vinfo.vglob))])
-                              |Mem _ -> Result.error "Instr Mem Call not treated")
+                |Some lval -> Result.bind (pc_of_lval lval) (fun pc_lval ->
+                                Result.ok ([PCall(fname, pc_exp_list);
+                                            PRetAttr((pc_lval))]))
                 |None -> Result.ok ([PCall(fname, pc_exp_list)]))
-            |Ok _ -> Error "Call instr should have PLoad exp"
+            |Ok _ -> Error "Call instr should have PLoad(PLVar()) exp"
             |Error e -> Error e))
   | Local_init (vinfo, local_init, _) ->
     (match local_init with
@@ -147,15 +155,19 @@ let pc_of_instr = function
                                               (match pc_exp with
                                                 |Ok ok_exp ->
                                                   (match vinfo.vtype with
-                                                  |TPtr _ -> Result.ok ([PStorePtr(ok_exp,(vinfo.vorig_name,vinfo.vglob))])
-                                                  |_ -> Result.ok ([PStore(ok_exp,(vinfo.vorig_name,vinfo.vglob))]))
+                                                  |TPtr _ -> Result.ok ([PStore(ok_exp,PLPtr(vinfo.vorig_name,vinfo.vglob))])
+                                                  |_ -> Result.ok ([PStore(ok_exp,PLVar(vinfo.vorig_name,vinfo.vglob))]))
                                                 |Error e -> Error e)
                             |CompoundInit _ -> let record = struct_to_pc_expr init in
-                                                 Result.ok ([PStore(record,(vinfo.vorig_name,vinfo.vglob))]))
+                                                 Result.ok ([PStore(record,PLVar(vinfo.vorig_name,vinfo.vglob))]))
       |ConsInit (finfo, args, _) -> (match pc_of_exp_list args with
                                       |Error e -> Error e
-                                      |Ok pc_args_list -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
-                                                                     PRetAttr((vinfo.vorig_name,vinfo.vglob))]))
+                                      |Ok pc_args_list ->
+                                        (match vinfo.vtype with
+                                          |TPtr _ -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
+                                                                PRetAttr(PLPtr(vinfo.vorig_name,vinfo.vglob))]
+                                          |_ -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
+                                                           PRetAttr(PLVar(vinfo.vorig_name,vinfo.vglob))])))
   | Skip _ -> Result.ok ([])
   | i -> Result.error (Printf.sprintf "Instr not treated %s" (instr_to_str i))
   (* | Asm of attributes * string list * extended_asm option * location

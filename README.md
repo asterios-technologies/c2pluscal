@@ -49,7 +49,6 @@
 ## Opérations non supportées
 
   Pour le moment, le transpiler ne supporte pas les :
-      - Structures
       - Tableaux
       - Enum
       - Boucles

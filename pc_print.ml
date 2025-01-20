@@ -35,21 +35,26 @@ let rec print_pc_cst out (c: pc_cst) = match c with
                   Format.fprintf out ",") l;
                 Format.fprintf out ")";
 
+and print_pc_lval out (lval: pc_lval) = match lval with
+PLVar(ptr,_) -> Format.fprintf out "%s" ptr;
+|PLPtr(ptr,_) -> Format.fprintf out "%s" ptr;
+|PField(field,(ptr,_)) -> Format.fprintf out "%s.%s" ptr field
+
 and print_pc_expr out (exp: pc_expr) = match exp with
   PCst(cst) -> Format.fprintf out "PCst(";print_pc_cst out cst;Format.fprintf out ")";
-  |PPtr((ptr,_)) -> Format.fprintf out "PPtr(%s)" ptr;
   |PBinop(binop,e1,e2) -> Format.fprintf out "PBinop(";print_pc_binop out binop;
                           Format.fprintf out ",";print_pc_expr out e1;
                           Format.fprintf out ",";print_pc_expr out e2;Format.fprintf out ")";
   |PUnop(unop,exp) -> Format.fprintf out "PUnop(";print_pc_unop out unop;
                       Format.fprintf out ",";print_pc_expr out exp;Format.fprintf out ")";
   |PUndef -> Format.fprintf out "PUndef";
-  |PLoad((ptr,_)) -> Format.fprintf out "PLoad(%s)" ptr;
+  |PLoad(lval) -> Format.fprintf out "PLoad(PLVal(";print_pc_lval out lval;
+                  Format.fprintf out ")";Format.fprintf out ")";
   |PArg((vname,_)) -> Format.fprintf out "PArg(%s)" vname
 
 let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
-  PStore(e,(ptr,_)) -> Format.fprintf out "PStore(";print_pc_expr out e;Format.fprintf out ",%s)" ptr;
-  |PStorePtr(e,(ptr,_)) -> Format.fprintf out "PStorePtr(";print_pc_expr out e;Format.fprintf out ",%s)" ptr;
+  PStore(e,lval) -> Format.fprintf out "PStore(";print_pc_expr out e;Format.fprintf out ",PLVal(";print_pc_lval out lval;
+                    Format.fprintf out ")";Format.fprintf out ")";
   |PCall(fname,args) -> Format.fprintf out "PCall(%s," fname; (List.iter (print_pc_expr out) args);Format.fprintf out ")";
   |PIf(e, l1, l2) -> Format.fprintf out "PIf(";print_pc_expr out e;Format.fprintf out ",";
                      (List.iter (print_pc_instr out) l1);Format.fprintf out ",";
@@ -58,7 +63,8 @@ let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
   |PReturn(e) -> Format.fprintf out "PReturn(";print_pc_expr out e;Format.fprintf out ")";
   |PDecl(e,(ptr,_)) -> Format.fprintf out "PDecl(";print_pc_expr out e;Format.fprintf out ",%s)" ptr;
   |PPop -> Format.fprintf out "PPop()";
-  |PRetAttr((ptr,_)) -> Format.fprintf out "PRetAttr(%s)" ptr;
+  |PRetAttr(lval) -> Format.fprintf out "PRetAttr(PLVal(";print_pc_lval out lval;
+                     Format.fprintf out ")";Format.fprintf out ")";
   |PGoto(lbl) -> Format.fprintf out "PGoto(%s)" lbl;
   |PLabel(lbl) -> Format.fprintf out "PStmt(%s)" lbl;
   |PInitDone -> Format.fprintf out "PInitDone";

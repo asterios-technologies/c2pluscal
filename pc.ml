@@ -16,29 +16,32 @@ type pc_cst = PInt of int
               |PString of string
               |PRecord of (string * pc_expr) list (*Record type : [a |-> ..., b |-> ..., etc]*)
 
+(*LVALUE*)
+and pc_lval = |PLVar of pc_ptr
+              |PLPtr of pc_ptr
+              |PField of (string * pc_ptr) (*Field of a record : name of field * name of ptr*)
+
 (*EXPR*)
 and pc_expr = PCst of pc_cst (*constant value : cst*)
-               |PLoad of pc_ptr (*load a ptr : ptr to load*)
-               |PArg of pc_var (*arg of func : arg name*)
-               |PPtr of pc_ptr (*ptr : ptr*)
-               |PBinop of pc_binop * pc_expr * pc_expr (*binop : binop * fst op * snd op*)
-               |PUnop of pc_unop * pc_expr (*unop : unop * fst op*)
-               |PUndef (*undef for empty decl*)
+              |PLoad of pc_lval (*load a ptr : ptr to load*)
+              |PArg of pc_var (*arg of func : arg name*)
+              |PBinop of pc_binop * pc_expr * pc_expr (*binop : binop * fst op * snd op*)
+              |PUnop of pc_unop * pc_expr (*unop : unop * fst op*)
+              |PUndef (*undef for empty decl*)
 
 (*TYPE FOR TYPEOK*)
 type pc_type = PStruct of string * (string list) (*struct : struct name * (field name list) *)
                |PEnum
 
 (*INSTR*)
-type pc_instr = PStore of pc_expr * pc_ptr (*store : expr to store * ptr to store*)
-                |PStorePtr of pc_expr * pc_ptr (*store in a ptr, eg. x = y with x a ptr : expr to store * ptr to store*)
+type pc_instr = PStore of pc_expr * pc_lval (*store : expr to store * ptr to store*)
                 |PCall of string * (pc_expr list) (*func call : func name * arg list*)
                 |PIf of pc_expr * (pc_instr list) * (pc_instr list) (*if : cond * true instr list * false instr list*)
                 |PWhile
                 |PReturn of pc_expr (*return : return expr*)
                 |PDecl of pc_expr * pc_ptr (*var decl : expr to assign * ptr to assign*)
                 |PPop (*pop op*)
-                |PRetAttr of pc_ptr (*get return value : ptr to store, comes after a PCall*)
+                |PRetAttr of pc_lval (*get return value : ptr to store, comes after a PCall*)
                 |PGoto of pc_label (*goto op : label to go*)
                 |PLabel of pc_label (*label : bame of label to write*)
                 |PAwaitInit (*await init is finished flag*)

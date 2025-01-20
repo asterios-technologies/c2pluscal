@@ -37,9 +37,13 @@ let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
                   dump_pc_expr proc_name out exp;);
                 Format.fprintf out "]"
 
+(* and dump_pc_lval (proc_name: string) out (lval: pc_lval) = match lval with
+   PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
+  |PLPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
+  |PField(field,ptr) -> Format.fprintf out "" *)
+
 and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
   PCst(cst) -> dump_pc_cst proc_name out cst;
-  |PPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
   |PBinop(binop,e1,e2) -> (match is_binop_ptr binop with
                             |true ->
                               Format.fprintf out "(";
@@ -52,20 +56,23 @@ and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
   |PUnop(unop,exp) -> Format.fprintf out "(";dump_pc_unop out unop;
                       dump_pc_expr proc_name out exp;Format.fprintf out ")";
   |PUndef -> Format.fprintf out "UNDEF";
-  |PLoad(ptr) -> Format.fprintf out "load(self,%s)" (ptr_to_string proc_name ptr)
+  |PLoad(lval) -> (match lval with
+                    |PLVar(ptr) -> Format.fprintf out "load(self,%s)" (ptr_to_string proc_name ptr);
+                    |PLPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
+                    |PField(field,ptr) -> Format.fprintf out "load(self,%s).%s" (ptr_to_string proc_name ptr) field)
   |PArg(v) -> dump_arg proc_name out v
 
 (* Our stack grows backward -> should invert arithmetic operations *)
 and dump_pc_binop_ptr out (proc_name: string) (b: pc_binop) (e1: pc_expr) (e2: pc_expr) =
   (match e1 with
-    |PPtr(ptr) -> let ptr_string = (ptr_to_string proc_name ptr) in
+    |PLoad(PLPtr(ptr)) -> let ptr_string = (ptr_to_string proc_name ptr) in
                   (match b with
                     | PAddPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs-" ptr_string ptr_string ptr_string;
                                 dump_pc_expr proc_name out e2; Format.fprintf out "]";
                     | PSubPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+" ptr_string ptr_string ptr_string;
                                 dump_pc_expr proc_name out e2; Format.fprintf out "]";
                     | PSubPP -> (match e2 with
-                                  |PPtr(ptr2) -> let ptr2_string = (ptr_to_string proc_name ptr2) in
+                                  |PLoad(PLPtr(ptr2)) -> let ptr2_string = (ptr_to_string proc_name ptr2) in
                                     Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+%s.offs]" ptr_string ptr_string ptr_string ptr2_string;
                                   |_ -> Format.fprintf out "Error: ptr snd op expected")
                     | _ -> Format.fprintf out "Error: ptr fst op expected")
@@ -73,8 +80,11 @@ and dump_pc_binop_ptr out (proc_name: string) (b: pc_binop) (e1: pc_expr) (e2: p
 
 let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
   let label,proc_name,line,indent = info in match i_type with
-  PStore(e,ptr) -> Format.fprintf out "store(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
-  |PStorePtr(e,ptr) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr);dump_pc_expr proc_name out e;Format.fprintf out ";\n";
+  PStore(e,lval) -> (match lval with
+                      |PLVar(ptr) -> Format.fprintf out "store(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
+                      |PLPtr(ptr) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr);dump_pc_expr proc_name out e;Format.fprintf out ";\n";
+                      |PField(field,ptr) -> Format.fprintf out "store([load(self,%s) EXCEPT !.%s = " (ptr_to_string proc_name ptr) field;
+                                            dump_pc_expr proc_name out e;Format.fprintf out "],%s);\n" (ptr_to_string proc_name ptr))
   |PCall(fname,args) -> Format.fprintf out "call %s(" fname;dump_list out args (dump_pc_expr proc_name);Format.fprintf out ");\n";
   |PIf(e,l1,l2) -> Format.fprintf out "if(";dump_pc_expr proc_name out e;Format.fprintf out ") then\n";
                     (List.iteri (fun i -> dump_pc_instr out
@@ -88,7 +98,12 @@ let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
   |PReturn(e) -> Format.fprintf out "push(ret, ";dump_pc_expr proc_name out e;Format.fprintf out ");\n";
   |PDecl(e,ptr) -> Format.fprintf out "decl(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
   |PPop -> Format.fprintf out "pop(my_stack);\n";
-  |PRetAttr(ptr) -> Format.fprintf out "attr_return(ret, %s);\n" (ptr_to_string proc_name ptr);
+  |PRetAttr(lval) -> (match lval with
+                      |PLVar(ptr) -> Format.fprintf out "attr_return(ret, %s);\n" (ptr_to_string proc_name ptr);
+                      |PLPtr(ptr) -> Format.fprintf out "attr_return_ptr(ret, %s);\n" (ptr_to_string proc_name ptr);
+                      |PField(field,ptr) -> Format.fprintf out "store([load(self,%s) EXCEPT !.%s = Head(ret)],%s);\n"
+                                            (ptr_to_string proc_name ptr) field (ptr_to_string proc_name ptr);
+                                            Format.fprintf out "pop(ret);\n")
   |PGoto(lbl) -> Format.fprintf out "goto %s;\n" (remove_last_char lbl); (* lbl="label:", remove the ":"*)
   |PLabel(_) -> Format.fprintf out "skip;\n";
   |PInitDone -> Format.fprintf out "initDone := TRUE;\n"
@@ -177,6 +192,11 @@ let dump_prog out (prog: pc_prog) =
   Format.fprintf out "\n";
   Format.fprintf out "macro attr_return(ret, ptr) begin\n";
   Format.fprintf out "    store(Head(ret), ptr);\n";
+  Format.fprintf out "    pop(ret);\n";
+  Format.fprintf out "end macro;\n";
+  Format.fprintf out "\n";
+  Format.fprintf out "macro attr_return_ptr(ret, ptr) begin\n";
+  Format.fprintf out "    ptr := Head(ret);\n";
   Format.fprintf out "    pop(ret);\n";
   Format.fprintf out "end macro;\n";
   Format.fprintf out "\n";
