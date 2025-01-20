@@ -5,6 +5,7 @@
 *.tla
 *.out
 *.dot
+*.dump
 
 #Produced dirs
 states/
