@@ -49,7 +49,8 @@ int main() {
     int z;
     int b;
     int c;
-    // int d = 0;
+    int i = 0;
+    int d = 0;
 
     struct error error1 = {"test error", 2};
     struct error* error_ptr = &error1;
@@ -59,12 +60,20 @@ int main() {
     b = fact(3);
     a = 2;
 
+    while(i < 6) {
+        i += 1;
+    }
+
+    for(int j=0; j<10; j++) {
+        d += i;
+    }
+
+    do {
+        i += 1;
+    } while(i < 10);
+
     struct_fun(error_ptr);
     c = error1.id;
-
-    // for(int i=0; i<10; i++) {
-    //     d += i;
-    // }
 
     return 0;
 }

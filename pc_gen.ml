@@ -117,18 +117,19 @@ and struct_to_pc_expr (i: init) =
   match i with
   |CompoundInit (_,l) ->
       let record_result =
-        fold_left_result l (fun (offs,i) ->
-        (match offs with
+        fold_left_result
+        (fun (offs,i) -> (match offs with
           |Field(f,_) -> Result.ok (f.fname,init_to_pc_expr (Some i))
           |Index(_) -> Result.error "Index offset not treated"
           |_ -> Result.error "Offset should be Field or Index"))
+        (fun acc i -> acc@[i]) [] l
       in (match record_result with
             |Error _ -> PUndef
             |Ok ok_record -> PCst(PRecord(ok_record)))
   |_ -> PUndef
 
 (* Return Error if an error occurs in one exp of the list, OK(exp_list) , with exp_list list of pc_expr *)
-let pc_of_exp_list l = fold_left_result l (fun e -> pc_of_exp e.enode)
+let pc_of_exp_list l = fold_left_result (fun e -> pc_of_exp e.enode) (fun acc e -> acc@[e]) [] l
 
 let pc_of_instr = function
   | Set(lval, e, _) -> Result.bind (pc_of_exp e.enode) (fun pc_exp ->
@@ -189,23 +190,34 @@ let rec pc_of_stmt = function
                                                                    |Ok ok_b1 -> match pc_of_block b2.bstmts with
                                                                                 |Error err -> Error err
                                                                                 |Ok ok_b2 -> Result.ok [PIf(ok_exp, ok_b1, ok_b2)])
-  (* | Loop (l,b,loc,stmt1,stmt2) -> Result.error "Stmt not treated" *)
+  | Loop (_,b,loc,_,_) ->
+      Result.bind (pc_of_block b.bstmts) (fun pc_block ->
+        Result.ok ([PWhile(pc_block,Pretty_utils.to_string Printer.pp_location loc);PLabel("test:")]))
+      (* (match (stmt1, stmt2) with
+        |(None, None) -> Result.error "Break and Continue stmts in Loop should appear"
+        |(Some(_),None) -> Result.error "Break stmt in Loop should appear"
+        |(None,Some(_)) -> Result.error "Continue stmt in Loop should appear"
+        |(Some(s1),Some(s2)) -> (match (s1.labels, s2.labels) with
+                                  |([],[]) -> Result.error "Break and Continue labels in Loop should appear"
+                                  |(_::_,[]) -> Result.error "Break label in Loop should appear"
+                                  |([],_::_) -> Result.error "Continue label in Loop should appear"
+                                  |(_::_,_::_) -> Result.bind (pc_of_block b.bstmts) (fun _ ->
+                                                        Result.bind (pc_of_stmt s1.skind) (fun _ ->
+                                                          Result.bind (pc_of_stmt s2.skind) (fun _ ->
+                                                            Result.error "test"))))) *)
+  | Break loc -> Result.ok ([PGoto(Pretty_utils.to_string Printer.pp_location loc)])
   | Block b -> pc_of_block b.bstmts
-  | UnspecifiedSequence _ -> Result.ok ([])
+  | UnspecifiedSequence l -> pc_of_block (Cil.block_from_unspecified_sequence l).bstmts
   | s -> Result.error (Printf.sprintf "Stmt not treated %s" (stmt_to_str s))
   (* | TryFinally _ | TryExcept _ | TryCatch _ -> Format.fprintf out "try : "; Format.fprintf out "end try \n";
   | Throw _ -> Format.fprintf out "throw : "; Format.fprintf out "end throw \n";
-  | Break l -> Format.pp_print_string out "break : "; Printer.pp_location out l; Format.fprintf out "end break \n";
   | Continue l -> Format.pp_print_string out "continue :"; Printer.pp_location out l; Format.fprintf out "end continue \n";
   | Switch(e,b,stmt_list,loc) -> Format.fprintf out " switch : "; Printer.pp_exp out e; Printer.pp_block out b; List.iter (fun s -> Printer.pp_stmt out s) stmt_list; Printer.pp_location out loc; Format.fprintf out "end switch \n";*)
 
 and pc_of_block b =
-  List.fold_left (fun acc stmt ->
-    Result.bind acc (fun ok_acc ->
-        Result.bind (pc_of_stmt stmt.skind)
-          (fun ok_stmt ->
-          Result.ok (ok_acc@ok_stmt))))
-  (Result.ok []) b
+  if List.length b = 0 then Result.ok ([PSkip])
+  else
+    fold_left_result (fun s -> pc_of_stmt s.skind) (fun acc s_list -> acc@s_list) [] b
 
 let rec procedure_push_vars acc (vars: pc_var list) (is_args: bool) =
   match vars with

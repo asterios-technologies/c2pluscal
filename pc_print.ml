@@ -59,7 +59,8 @@ let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
   |PIf(e, l1, l2) -> Format.fprintf out "PIf(";print_pc_expr out e;Format.fprintf out ",";
                      (List.iter (print_pc_instr out) l1);Format.fprintf out ",";
                      (List.iter (print_pc_instr out) l2);Format.fprintf out ")";
-  |PWhile -> Format.fprintf out "PWhile()";
+  |PWhile(l,break_lbl) -> Format.fprintf out "PWhile(";(List.iter (print_pc_instr out) l);Format.fprintf out ";";
+                          Format.fprintf out "%s)" break_lbl;
   |PReturn(e) -> Format.fprintf out "PReturn(";print_pc_expr out e;Format.fprintf out ")";
   |PDecl(e,(ptr,_)) -> Format.fprintf out "PDecl(";print_pc_expr out e;Format.fprintf out ",%s)" ptr;
   |PPop -> Format.fprintf out "PPop()";
@@ -69,6 +70,7 @@ let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
   |PLabel(lbl) -> Format.fprintf out "PStmt(%s)" lbl;
   |PInitDone -> Format.fprintf out "PInitDone";
   |PAwaitInit -> Format.fprintf out "PAwaitInit"
+  |PSkip -> Format.fprintf out "PSkip"
 
 
 and print_pc_instr out (i: pc_instr) =
