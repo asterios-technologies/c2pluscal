@@ -117,18 +117,19 @@ and struct_to_pc_expr (i: init) =
   match i with
   |CompoundInit (_,l) ->
       let record_result =
-        fold_left_result l (fun (offs,i) ->
-        (match offs with
+        fold_left_result
+        (fun (offs,i) -> (match offs with
           |Field(f,_) -> Result.ok (f.fname,init_to_pc_expr (Some i))
           |Index(_) -> Result.error "Index offset not treated"
           |_ -> Result.error "Offset should be Field or Index"))
+        (fun acc i -> acc@[i]) [] l
       in (match record_result with
             |Error _ -> PUndef
             |Ok ok_record -> PCst(PRecord(ok_record)))
   |_ -> PUndef
 
 (* Return Error if an error occurs in one exp of the list, OK(exp_list) , with exp_list list of pc_expr *)
-let pc_of_exp_list l = fold_left_result l (fun e -> pc_of_exp e.enode)
+let pc_of_exp_list l = fold_left_result (fun e -> pc_of_exp e.enode) (fun acc e -> acc@[e]) [] l
 
 let pc_of_instr = function
   | Set(lval, e, _) -> Result.bind (pc_of_exp e.enode) (fun pc_exp ->
@@ -174,38 +175,42 @@ let pc_of_instr = function
   | Code_annot of code_annotation * location *)
 
 let rec pc_of_stmt = function
-  | Instr i -> pc_of_instr i
+  | Instr i -> (pc_of_instr i, 0)
   | Return (r,_) -> (match r with
                                     |Some e -> let pc_exp = pc_of_exp e.enode in
                                                 (match pc_exp with
-                                                  |Ok ok_exp -> Result.ok [PReturn(ok_exp)]
-                                                  |Error e -> Error e)
-                                    |None -> Result.ok [])
-  | Goto (r,_) -> Result.ok [PGoto(Pretty_utils.to_string Printer.pp_label (List.hd (!r).labels))]
+                                                  |Ok ok_exp -> (Result.ok [PReturn(ok_exp)], 0)
+                                                  |Error e -> (Error e, 0))
+                                    |None -> (Result.ok [], 0))
+  | Goto (r,_) -> (Result.ok [PGoto(Pretty_utils.to_string Printer.pp_label (List.hd (!r).labels))], 0)
   | If (e,b1,b2,_) -> (match pc_of_exp e.enode with
-                                                    |Error err -> Error err
+                                                    |Error err -> (Error err, 0)
                                                     |Ok ok_exp -> match pc_of_block b1.bstmts with
-                                                                   |Error err -> Error err
+                                                                   |Error err -> (Error err, 0)
                                                                    |Ok ok_b1 -> match pc_of_block b2.bstmts with
-                                                                                |Error err -> Error err
-                                                                                |Ok ok_b2 -> Result.ok [PIf(ok_exp, ok_b1, ok_b2)])
-  (* | Loop (l,b,loc,stmt1,stmt2) -> Result.error "Stmt not treated" *)
-  | Block b -> pc_of_block b.bstmts
-  | UnspecifiedSequence _ -> Result.ok ([])
-  | s -> Result.error (Printf.sprintf "Stmt not treated %s" (stmt_to_str s))
+                                                                                |Error err -> (Error err, 0)
+                                                                                |Ok ok_b2 -> (Result.ok [PIf(ok_exp, ok_b1, ok_b2)],
+                                                                                             List.length b1.bstmts + List.length b2.bstmts))
+  | Loop (_,b,_,_,s) ->
+      (match s with |None -> Result.error "Break stmts in Loop should appear", 0
+      |Some(s) ->
+        Result.bind (pc_of_block b.bstmts) (fun pc_block ->
+          Result.ok ([PWhile(pc_block,Pretty_utils.to_string Printer.pp_label (List.hd s.labels))])), List.length b.bstmts+1)
+  | Break loc -> Result.ok ([PGoto(Pretty_utils.to_string Printer.pp_location loc)]), 0
+  | Block b -> pc_of_block b.bstmts, List.length b.bstmts
+  | UnspecifiedSequence l ->
+    let block = (Cil.block_from_unspecified_sequence l).bstmts in pc_of_block block, List.length block
+
+  | s -> Result.error (Printf.sprintf "Stmt not treated %s" (stmt_to_str s)), 0
   (* | TryFinally _ | TryExcept _ | TryCatch _ -> Format.fprintf out "try : "; Format.fprintf out "end try \n";
   | Throw _ -> Format.fprintf out "throw : "; Format.fprintf out "end throw \n";
-  | Break l -> Format.pp_print_string out "break : "; Printer.pp_location out l; Format.fprintf out "end break \n";
   | Continue l -> Format.pp_print_string out "continue :"; Printer.pp_location out l; Format.fprintf out "end continue \n";
   | Switch(e,b,stmt_list,loc) -> Format.fprintf out " switch : "; Printer.pp_exp out e; Printer.pp_block out b; List.iter (fun s -> Printer.pp_stmt out s) stmt_list; Printer.pp_location out loc; Format.fprintf out "end switch \n";*)
 
 and pc_of_block b =
-  List.fold_left (fun acc stmt ->
-    Result.bind acc (fun ok_acc ->
-        Result.bind (pc_of_stmt stmt.skind)
-          (fun ok_stmt ->
-          Result.ok (ok_acc@ok_stmt))))
-  (Result.ok []) b
+  if List.length b = 0 then Result.ok ([PSkip])
+  else
+    fold_left_result (fun s -> fst (pc_of_stmt s.skind)) (fun acc s_list -> acc@s_list) [] b
 
 let rec procedure_push_vars acc (vars: pc_var list) (is_args: bool) =
   match vars with
@@ -221,6 +226,8 @@ let rec procedure_pop acc n =
 
 class gen_pc (prog: pc_prog ref) = object
   inherit Visitor.frama_c_inplace
+
+  val child_to_skip = ref 0;
 
   method! vfile _ =
     let name = get_file_name() in
@@ -253,7 +260,8 @@ class gen_pc (prog: pc_prog ref) = object
                                       Cil.DoChildren
       | GCompTag(compinfo, _) -> if compinfo.cstruct then Cil.DoChildren
                                  else (Printf.eprintf "Union not supported"; Cil.DoChildren)
-      | GFun(fundec, _) -> let args = List.map (varinfo_to_pcvar) fundec.sformals in
+      | GFun(fundec, _) ->  Cfg.prepareCFG fundec;
+                            let args = List.map (varinfo_to_pcvar) fundec.sformals in
                              let vars = List.map (varinfo_to_pcvar) fundec.slocals in
                              let args_decl = procedure_push_vars [] args true in
                              let vars_decl = procedure_push_vars [] vars false in
@@ -289,10 +297,12 @@ class gen_pc (prog: pc_prog ref) = object
                       Cil.DoChildrenPost (fun g -> Format.fprintf out "End GFunDecl \n"; g) *)
 
   method! vstmt_aux s =
-    let skip = skip_children s.skind in
-    match skip with |1 -> Cil.SkipChildren |_ ->
-    let next = (match skip with |2-> Cil.SkipChildren |_ -> Cil.DoChildren) in
-    let pc_instrs_result = pc_of_stmt s.skind in
+    match !child_to_skip with |i when i > 0 ->
+      child_to_skip := !child_to_skip - 1;
+      Cil.SkipChildren
+    |_ ->
+    let (pc_instrs_result,nb_skip) = pc_of_stmt s.skind in
+    child_to_skip := nb_skip;
     match pc_instrs_result with
       |Error e -> Printf.eprintf "Error : %s" e; Cil.DoChildren
       |Ok pc_instrs -> match (!prog).pc_procedures with
@@ -304,7 +314,7 @@ class gen_pc (prog: pc_prog ref) = object
                                                                       curr_proc.pc_procedure_body@
                                                                       pc_instrs}
                                                                     ::q;};
-                                            next
+                                            Cil.DoChildren
                                             |lbl::_ -> prog :=
                                                       {!prog with
                                                       pc_procedures = {curr_proc with
@@ -313,6 +323,6 @@ class gen_pc (prog: pc_prog ref) = object
                                                                         (PLabel(Pretty_utils.to_string Printer.pp_label lbl)
                                                                         ::pc_instrs)}
                                                                       ::q;};
-                                            next)
+                                            Cil.DoChildren)
                         |[] -> Printf.eprintf "Error no procedure"; Cil.DoChildren
 end

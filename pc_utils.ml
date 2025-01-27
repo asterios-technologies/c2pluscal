@@ -5,14 +5,6 @@ let get_file_name() =
     let full_name =  Filepath.Normalized.to_pretty_string (List.hd (Kernel.Files.get())) in
     String.sub full_name 0 (String.length full_name - 2)
 
-(* return 1 if need to skip children without process,
-    2 if skip children after process,
-    0 otherwise*)
-let skip_children (s: stmtkind) = match s with
-    |Block _ -> 1
-    |If _ -> 2
-    |_ -> 0
-
 let is_binop_ptr (b: pc_binop) = match b with
     | PAddPI | PSubPI | PSubPP -> true
     |_ -> false
@@ -52,10 +44,10 @@ let remove_last_char s =
       String.sub s 0 (String.length s - 1)
 
 (*Fold f on l = [i1,i2,...,in], with Error if one
-  of f ik = error, and ok([f i1,..., f in]) otherwise*)
-let fold_left_result l f =
+  of f ik = error, and ok(g(g (g init_acc (f i1)) i2) ...) otherwise*)
+let fold_left_result f g init_acc l =
     List.fold_left (fun acc i ->
         Result.bind acc (fun ok_acc ->
             Result.bind (f i) (fun ok_i ->
-                Result.ok (ok_acc@[ok_i]))))
-    (Result.ok []) l
+                Result.ok (g ok_acc ok_i))))
+    (Result.ok init_acc) l
