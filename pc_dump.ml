@@ -94,10 +94,13 @@ let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
                       (List.iteri (fun i -> dump_pc_instr out
                         ((String.concat "" [label;(string_of_int (List.length l1+i))]),proc_name,line,add_indent 1 indent)) l2);
                     Format.fprintf out "%send if;\n" indent;
-  |PWhile(l,_) -> Format.fprintf out "while(TRUE) do\n";
+  |PWhile(l,lbl) -> Format.fprintf out "while(TRUE) do\n";
                             (List.iteri (fun i -> dump_pc_instr out
                               ((String.concat "" [label;(string_of_int i)]),proc_name,line,add_indent 1 indent)) l);
-                            Format.fprintf out "%send while;\n" indent;
+                    Format.fprintf out "%send while;\n" indent;
+                    Format.fprintf out "\n";
+                    Format.fprintf out "%s%s\n" indent lbl;
+                    Format.fprintf out "%sskip;\n" indent;
   |PReturn(e) -> Format.fprintf out "push(ret, ";dump_pc_expr proc_name out e;Format.fprintf out ");\n";
   |PDecl(e,ptr) -> Format.fprintf out "decl(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
   |PPop -> Format.fprintf out "pop(my_stack);\n";

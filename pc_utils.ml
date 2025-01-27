@@ -5,16 +5,6 @@ let get_file_name() =
     let full_name =  Filepath.Normalized.to_pretty_string (List.hd (Kernel.Files.get())) in
     String.sub full_name 0 (String.length full_name - 2)
 
-(* return 1 if need to skip children without process,
-    2 if skip children after process,
-    0 otherwise*)
-let skip_children (s: stmtkind) = match s with
-    |Block _ -> 1
-    |UnspecifiedSequence _ -> 2
-    |If _ -> 2
-    |Loop _ -> 2
-    |_ -> 0
-
 let is_binop_ptr (b: pc_binop) = match b with
     | PAddPI | PSubPI | PSubPP -> true
     |_ -> false

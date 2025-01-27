@@ -52,7 +52,7 @@ int main() {
     int i = 0;
     int d = 0;
 
-    struct error error1 = {"test error", 2};
+    struct error error1 = {"test error", 3};
     struct error* error_ptr = &error1;
 
     z = f(x);

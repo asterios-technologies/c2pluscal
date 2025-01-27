@@ -38,7 +38,7 @@ type pc_instr = PStore of pc_expr * pc_lval (*store : expr to store * ptr to sto
                 |PCall of string * (pc_expr list) (*func call : func name * arg list*)
                 |PIf of pc_expr * (pc_instr list) * (pc_instr list) (*if : cond * true instr list * false instr list*)
                 |PLabel of pc_label (*label : name of label to write*)
-                (*loop: block of instr of the loop * (continue instr * label) * (break instr * label)*)
+                (*loop: block of instr of the loop*)
                 |PWhile of pc_instr list * (pc_label)
                 |PReturn of pc_expr (*return : return expr*)
                 |PDecl of pc_expr * pc_ptr (*var decl : expr to assign * ptr to assign*)

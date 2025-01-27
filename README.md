@@ -43,6 +43,12 @@
   et que la variable globale `a` contient la valeur 2, on écrira :
   ```
     Prop == /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], x_ptr_main[0]) = 3)
+            /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], z_ptr_main[0]) = 5)
+            /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], b_ptr_main[0]) = 6)
+            /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], c_ptr_main[0]) = 2)
+            /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], i_ptr_main[0]) = 10)
+            /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], d_ptr_main[0]) = 60)
+            /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], j_ptr_main[0]) = 10)
             /\ <>[](mem /= <<>> /\ load(mem, a_ptr_glob) = 2)
   ```
 
@@ -51,7 +57,6 @@
   Pour le moment, le transpiler ne supporte pas les :
       - Tableaux
       - Enum
-      - Boucles
       - Define
 
   Mais ça ne saurait tarder :)
