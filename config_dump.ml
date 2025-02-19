@@ -10,6 +10,12 @@ let dump_config out (prog: pc_prog) =
   Format.fprintf out "  UNDEF = UNDEF\n";
   Format.fprintf out "  defaultInitValue = 0\n";
   Format.fprintf out "\n";
+  Format.fprintf out "CONSTANTS\n";
+  (List.iter (
+    fun (cst_name,cst_val) ->
+    Format.fprintf out "  %s = %i\n" cst_name cst_val)
+  prog.pc_constants);
+  Format.fprintf out "\n";
   Format.fprintf out "SPECIFICATION Spec\n";
   Format.fprintf out "\n";
   Format.fprintf out "PROPERTY\n";

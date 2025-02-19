@@ -1,4 +1,5 @@
 int a = 0;
+int glob_arr[10];
 
 struct error{
    char* name;
@@ -6,6 +7,8 @@ struct error{
 };
 
 struct error error = {"test glob error", 1};
+
+enum color { RED, GREEN, BLUE };
 
 int fact(int n) {
     if(n==0) {
@@ -44,6 +47,11 @@ void struct_fun(struct error* ptr) {
     return;
 }
 
+void arr_fun(int arr[]) {
+    arr[0] = 12;
+    return;
+}
+
 int main() {
     int x = 2;
     int z;
@@ -51,14 +59,32 @@ int main() {
     int c;
     int i = 0;
     int d = 0;
+    int k = 0;
+    int t = 0;
+
+    int* ptr = &z;
+    int** ptr_ptr = &ptr;
+
+    *ptr_ptr = &x;
+    k = **ptr_ptr;
 
     struct error error1 = {"test error", 3};
     struct error* error_ptr = &error1;
+
+    int simple_arr[5] = {1, 2, 3, 4, 5};
+    struct error* ptr_arr[1];
+    ptr_arr[0] = error_ptr;
 
     z = f(x);
     g(&x);
     b = fact(3);
     a = 2;
+
+    enum color my_color = RED;
+
+    if (my_color == RED) {
+        my_color = BLUE;
+    }
 
     while(i < 6) {
         i += 1;
@@ -74,6 +100,11 @@ int main() {
 
     struct_fun(error_ptr);
     c = error1.id;
+
+    arr_fun(simple_arr);
+    glob_arr[5] = 1;
+    ptr_arr[0]->name = "test";
+    t = simple_arr[2];
 
     return 0;
 }

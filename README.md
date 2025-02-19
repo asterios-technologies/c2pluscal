@@ -28,15 +28,6 @@
   Les fichiers suivants seront générés :
       test.tla : La spécification en PlusCal.
       test.cfg : Le fichier de configuration.
-      test.dump : Un fichier de log qui peut être ignoré.
-
-  ⚠️ Le fichier .dump n'est pas conçu pour être utilisé dans le processus de modélisation ou de vérification.
-
-  ⚠️ Le fichier généré contient un code PlusCal, une fois traduit, il faut déplacer la partie `load` qui contiendra une erreur
-  en dessous du prédicat `Init`.
-
-  ⚠️ Si vous voulez vérifier des valeurs avant la fin de la fonction `main`, il faudra rajouter un blocage du programme,
-   à la main, avec un `await FALSE`.
 
   ⚠️ Il faudra écrire les Invariants et Propriétés à la main en dessous de la traduction PlusCal, dans des prédicats respectifs,
   `Inv` et `Prop`, par exemple pour vérifier que la variable `x` du fichier `test.tla` contient la valeur 3 après éxecution,
@@ -51,6 +42,13 @@
             /\ <>[](my_stack[0] /= <<>> /\ load(my_stack[0], j_ptr_main[0]) = 10)
             /\ <>[](mem /= <<>> /\ load(mem, a_ptr_glob) = 2)
   ```
+
+## Options
+
+  - `-debug-dump` : permet de générer un fichier `.dump` contenant des informations de debug sur la traduction
+  - `-block-main` : permet d'ajouter une instruction qui bloque l'exécution du programme avant la fin de la fonction
+                    d'entrée, afin d'écrire des propriétés et invariants sur les variables du programme, avant qu'elles
+                    ne soient pop de la stack
 
 ## Opérations non supportées
 

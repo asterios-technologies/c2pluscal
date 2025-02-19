@@ -13,9 +13,8 @@ let vname_to_string (proc_name: string) (vname: string) =
     let name_strings = [vname;"_ptr_";proc_name] in
     String.concat "" name_strings
 
-let arg_to_string (proc_name: string) (vname,bool_ptr: pc_var) =
-    if bool_ptr then vname_to_string proc_name vname
-    else let name_strings = [vname;"_";proc_name] in
+let arg_to_string (proc_name: string) (vname: pc_var) =
+    let name_strings = [vname;"_";proc_name] in
         String.concat "" name_strings
 
 let ptr_to_string (proc_name: string) ((ptr_name,glob): pc_ptr) =
@@ -23,10 +22,16 @@ let ptr_to_string (proc_name: string) ((ptr_name,glob): pc_ptr) =
     let name_strings = [ptr_name;"_ptr_";suffix] in
     String.concat "" name_strings
 
-let varinfo_to_pcvar (v: varinfo) =
-    (v.vorig_name,
-    (match v.vtype with |TPtr _ -> true |_ -> false))
-    (* Pretty_utils.to_string Printer.pp_location loc) *)
+let varinfo_to_pcvar (v: varinfo) = (v.vorig_name)
+
+let varinfo_to_pc_decl (v: varinfo) =
+    match v.vtype with
+        |TArray(_,e,_) -> (match e with
+                            | Some exp -> (match exp.enode with
+                                            |Const(CInt64(i,_,_)) -> (v.vorig_name, Some (Integer.to_int_exn i))
+                                            |_ -> (v.vorig_name, None))
+                            | None -> (v.vorig_name, Some (0)))
+        |_ -> (v.vorig_name, None)
 
 let rec dump_list out l dump_fun =
     match l with
@@ -51,3 +56,8 @@ let fold_left_result f g init_acc l =
             Result.bind (f i) (fun ok_i ->
                 Result.ok (g ok_acc ok_i))))
     (Result.ok init_acc) l
+
+let add_pc_cst (e: pc_expr) (n: int) =
+    match e with
+        |PCst(PInt(i)) -> PCst(PInt(i+n))
+        |_ -> e

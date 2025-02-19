@@ -3,7 +3,7 @@ open Pc_utils
 
 type dump_info = string * string * int * string (* label, proc_name, line, indent_space*)
 
-let dump_proc_var out (proc_name: string) ((v_name,_): pc_var) =
+let dump_proc_var out (proc_name: string) ((v_name): pc_var) =
   Format.fprintf out "    %s = [loc |-> \"stack\", fp |-> Len(my_stack), offs |-> 0];\n" (vname_to_string proc_name v_name)
 
 let dump_arg (proc_name: string) out (v: pc_var) =  Format.fprintf out "%s" (arg_to_string proc_name v)
@@ -36,6 +36,10 @@ let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
                   Format.fprintf out "%s |-> " field_name;
                   dump_pc_expr proc_name out exp;);
                 Format.fprintf out "]"
+  |PArray l -> Format.fprintf out "<<";
+    dump_list out l (fun out (_,exp) -> dump_pc_expr proc_name out exp;);
+    Format.fprintf out ">>"
+  |PEnumItem item_name -> Format.fprintf out "%s" item_name
 
 (* and dump_pc_lval (proc_name: string) out (lval: pc_lval) = match lval with
    PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
@@ -56,24 +60,44 @@ and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
   |PUnop(unop,exp) -> Format.fprintf out "(";dump_pc_unop out unop;
                       dump_pc_expr proc_name out exp;Format.fprintf out ")";
   |PUndef -> Format.fprintf out "UNDEF";
-  |PLoad(lval) -> (match lval with
-                    |PLVar(ptr) -> Format.fprintf out "load(self,%s)" (ptr_to_string proc_name ptr);
-                    |PLPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
-                    |PField(field,ptr) -> Format.fprintf out "load(self,%s).%s" (ptr_to_string proc_name ptr) field)
+  |PLval(lval) -> (match lval with
+                    |PLVar(ptr) -> Format.fprintf out "load(my_stack,%s)" (ptr_to_string proc_name ptr);
+                    (* |PLPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr); *)
+                    |PLoad(lval_prime) -> Format.fprintf out "load(my_stack,load(my_stack,";dump_pc_lval out proc_name lval_prime;Format.fprintf out "))";
+                    |PField(field,lval_prime) -> Format.fprintf out "load(my_stack,";dump_pc_lval out proc_name lval_prime;Format.fprintf out ").%s" field;
+                    |PIndex(idx,lval_prime) -> Format.fprintf out "load(my_stack,";
+                                               dump_pc_lval out proc_name lval_prime;
+                                               Format.fprintf out ")[";
+                                               (dump_pc_expr proc_name out idx);
+                                               Format.fprintf out "]")
   |PArg(v) -> dump_arg proc_name out v
+  |PAddr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
+
+and dump_pc_lval out (proc_name: string) (lval: pc_lval) = match lval with
+  |PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
+  |PLoad(lval_prime) -> Format.fprintf out "load(my_stack,";dump_pc_lval out proc_name lval_prime;Format.fprintf out ")";
+  |PField(field,lval_prime) -> Format.fprintf out "load(my_stack,";dump_pc_lval out proc_name lval_prime;
+                               Format.fprintf out ")";Format.fprintf out ".%s" field;
+  |PIndex(idx,lval_prime) -> Format.fprintf out "load(my_stack,";
+                             dump_pc_lval out proc_name lval_prime;
+                             Format.fprintf out ")";
+                             Format.fprintf out "[";
+                            (dump_pc_expr proc_name out idx);
+                            Format.fprintf out "]"
 
 (* Our stack grows backward -> should invert arithmetic operations *)
 and dump_pc_binop_ptr out (proc_name: string) (b: pc_binop) (e1: pc_expr) (e2: pc_expr) =
   (match e1 with
-    |PLoad(PLPtr(ptr)) -> let ptr_string = (ptr_to_string proc_name ptr) in
+    |PLval(PLVar(ptr)) -> let ptr_string = (ptr_to_string proc_name ptr) in
                   (match b with
-                    | PAddPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs-" ptr_string ptr_string ptr_string;
+                    | PAddPI -> Format.fprintf out "[loc |-> load(my_stack,%s).loc, fp |-> load(my_stack,%s).fp, offs |-> load(my_stack,%s).offs-" ptr_string ptr_string ptr_string;
                                 dump_pc_expr proc_name out e2; Format.fprintf out "]";
-                    | PSubPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+" ptr_string ptr_string ptr_string;
+                    | PSubPI -> Format.fprintf out "[loc |-> load(my_stack,%s).loc, fp |-> load(my_stack,%s).fp, offs |-> load(my_stack,%s).offs+" ptr_string ptr_string ptr_string;
                                 dump_pc_expr proc_name out e2; Format.fprintf out "]";
                     | PSubPP -> (match e2 with
-                                  |PLoad(PLPtr(ptr2)) -> let ptr2_string = (ptr_to_string proc_name ptr2) in
-                                    Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+%s.offs]" ptr_string ptr_string ptr_string ptr2_string;
+                                  |PLval(PLVar(ptr2)) -> let ptr2_string = (ptr_to_string proc_name ptr2) in
+                                    Format.fprintf out "[loc |-> load(my_stack,%s).loc, fp |-> load(my_stack,%s).fp, offs |-> load(my_stack,%s).offs+load(my_stack,%s).offs]"
+                                    ptr_string ptr_string ptr_string ptr2_string;
                                   |_ -> Format.fprintf out "Error: ptr snd op expected")
                     | _ -> Format.fprintf out "Error: ptr fst op expected")
     |_ -> Format.fprintf out "Error: ptr operand expected")
@@ -82,9 +106,26 @@ let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
   let label,proc_name,line,indent = info in match i_type with
   PStore(e,lval) -> (match lval with
                       |PLVar(ptr) -> Format.fprintf out "store(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
-                      |PLPtr(ptr) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr);dump_pc_expr proc_name out e;Format.fprintf out ";\n";
-                      |PField(field,ptr) -> Format.fprintf out "store([load(self,%s) EXCEPT !.%s = " (ptr_to_string proc_name ptr) field;
-                                            dump_pc_expr proc_name out e;Format.fprintf out "],%s);\n" (ptr_to_string proc_name ptr))
+                      (* |PLPtr(ptr) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr);dump_pc_expr proc_name out e;Format.fprintf out ";\n"; *)
+                      |PLoad(lval_prime) -> Format.fprintf out "store(";dump_pc_expr proc_name out e;Format.fprintf out ",load(my_stack,";
+                                            dump_pc_lval out proc_name lval_prime;
+                                            Format.fprintf out "));\n";
+                      |PField(field,lval_prime) -> Format.fprintf out "store([load(my_stack,";
+                                                   dump_pc_lval out proc_name lval_prime;
+                                                   Format.fprintf out ") EXCEPT !.%s = " field;
+                                                   dump_pc_expr proc_name out e;
+                                                   Format.fprintf out "],";
+                                                   dump_pc_lval out proc_name lval_prime;
+                                                   Format.fprintf out ");\n";
+                      |PIndex(idx,lval_prime) -> Format.fprintf out "store([load(my_stack,";
+                                                 dump_pc_lval out proc_name lval_prime;
+                                                 Format.fprintf out ") EXCEPT ![";
+                                                 dump_pc_expr proc_name out idx;
+                                                 Format.fprintf out "] = ";
+                                                 dump_pc_expr proc_name out e;
+                                                 Format.fprintf out "],";
+                                                 dump_pc_lval out proc_name lval_prime;
+                                                 Format.fprintf out ");\n")
   |PCall(fname,args) -> Format.fprintf out "call %s(" fname;dump_list out args (dump_pc_expr proc_name);Format.fprintf out ");\n";
   |PIf(e,l1,l2) -> Format.fprintf out "if(";dump_pc_expr proc_name out e;Format.fprintf out ") then\n";
                     (List.iteri (fun i -> dump_pc_instr out
@@ -103,18 +144,34 @@ let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
                     Format.fprintf out "%sskip;\n" indent;
   |PReturn(e) -> Format.fprintf out "push(ret, ";dump_pc_expr proc_name out e;Format.fprintf out ");\n";
   |PDecl(e,ptr) -> Format.fprintf out "decl(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
+  |PCopy(ptr,ptr_dst) -> Format.fprintf out "%s := %s;\n" (ptr_to_string proc_name ptr_dst) (ptr_to_string proc_name ptr);
   |PPop -> Format.fprintf out "pop(my_stack);\n";
   |PRetAttr(lval) -> (match lval with
                       |PLVar(ptr) -> Format.fprintf out "attr_return(ret, %s);\n" (ptr_to_string proc_name ptr);
-                      |PLPtr(ptr) -> Format.fprintf out "attr_return_ptr(ret, %s);\n" (ptr_to_string proc_name ptr);
-                      |PField(field,ptr) -> Format.fprintf out "store([load(self,%s) EXCEPT !.%s = Head(ret)],%s);\n"
-                                            (ptr_to_string proc_name ptr) field (ptr_to_string proc_name ptr);
-                                            Format.fprintf out "pop(ret);\n")
+                      (* |PLPtr(ptr) -> Format.fprintf out "attr_return_ptr(ret, %s);\n" (ptr_to_string proc_name ptr); *)
+                      |PLoad(lval_prime) -> Format.fprintf out "attr_return(ret, load(my_stack,";
+                                            dump_pc_lval out proc_name lval_prime;
+                                            Format.fprintf out "));\n";
+                      |PField(field,lval_prime) -> Format.fprintf out "store([load(my_stack,";
+                                                   dump_pc_lval out proc_name lval_prime;
+                                                   Format.fprintf out ") EXCEPT !.%s = Head(ret)]," field;
+                                                   dump_pc_lval out proc_name lval_prime;
+                                                   Format.fprintf out ");\n";
+                                                   Format.fprintf out "pop(ret);\n";
+                      |PIndex(idx,lval_prime) -> Format.fprintf out "store([load(my_stack,";
+                                                 dump_pc_lval out proc_name lval_prime;
+                                                 Format.fprintf out ") EXCEPT ![";
+                                                 dump_pc_expr proc_name out idx;
+                                                 Format.fprintf out "] = Head(ret)],";
+                                                 dump_pc_lval out proc_name lval_prime;
+                                                 Format.fprintf out ");\n")
   |PGoto(lbl) -> Format.fprintf out "goto %s;\n" (remove_last_char lbl); (* lbl="label:", remove the ":"*)
   |PLabel(_) -> Format.fprintf out "skip;\n";
   |PInitDone -> Format.fprintf out "initDone := TRUE;\n"
   |PAwaitInit -> Format.fprintf out "await initDone = TRUE;\n"
   |PSkip -> Format.fprintf out "skip;"
+  |PBlock -> Format.fprintf out "await FALSE;\n"
+  |PInitArray(size,ptr) -> Format.fprintf out "call init_array(%d,%s);\n" size (ptr_to_string proc_name ptr)
 
 and dump_pc_instr out (info: dump_info) (i: pc_instr) =
   let label,_,line,indent = info in
@@ -126,7 +183,7 @@ and dump_pc_instr out (info: dump_info) (i: pc_instr) =
 let dump_pc_procedure out (proc: pc_procedure) =
   Format.fprintf out "procedure %s(" proc.pc_procedure_name;dump_list out proc.pc_procedure_args (dump_arg proc.pc_procedure_name);Format.fprintf out ")\n";
   Format.fprintf out "variables\n";
-  (List.iter (dump_proc_var out proc.pc_procedure_name) (List.filter (fun (_,bool_ptr) -> not bool_ptr) proc.pc_procedure_args));
+  (List.iter (dump_proc_var out proc.pc_procedure_name) proc.pc_procedure_args);
   (List.iter (dump_proc_var out proc.pc_procedure_name) proc.pc_procedure_vars);
   Format.fprintf out "begin\n";
   (List.iteri (fun i -> dump_pc_instr out (proc.pc_procedure_name,proc.pc_procedure_name,i,(string_of_indent 1))) proc.pc_procedure_body);
@@ -144,7 +201,7 @@ let dump_pc_process out (proc: pc_process) =
   (List.iteri (fun i -> dump_pc_instr out (proc.pc_process_name,proc.pc_process_name,i,(string_of_indent 1))) proc.pc_process_body);
   Format.fprintf out "end process;\n"
 
-let dump_glob_var out ((gv_name,_): pc_var) =
+let dump_glob_var out ((gv_name): pc_var) =
   Format.fprintf out "    %s = [loc |-> \"mem\", fp |-> 0, offs |-> 0];\n" (vname_to_string "glob" gv_name)
 
 let dump_constant out (cst: string) =
@@ -155,7 +212,10 @@ let dump_prog out (prog: pc_prog) =
   Format.fprintf out "EXTENDS Integers, FiniteSets, Sequences\n";
   Format.fprintf out "CONSTANT ";
   dump_list out (List.map (fun proc -> proc.pc_process_set) prog.pc_processus) (dump_constant);
-  Format.fprintf out ",UNDEF\n";
+  Format.fprintf out ",UNDEF,\n";
+  Format.fprintf out "         ";
+  dump_list out (List.map (fun (cst_name,_) -> cst_name) prog.pc_constants) (dump_constant);
+  Format.fprintf out "\n";
   Format.fprintf out "\n";
   Format.fprintf out "(*--algorithm %s\n" prog.pc_prog_name;
   Format.fprintf out "variables\n";
@@ -163,11 +223,11 @@ let dump_prog out (prog: pc_prog) =
   Format.fprintf out "    tmpArrayFill = 0;\n";
   Format.fprintf out "    initDone = FALSE;\n";
   Format.fprintf out "\n";
-  List.iter (dump_glob_var out) (List.map (fun (a,_) -> a) prog.pc_glob_var);
+  List.iter (dump_glob_var out) (List.map (fun ((a,_),_) -> a) prog.pc_glob_var);
   Format.fprintf out "\n";
   Format.fprintf out "define\n";
-  Format.fprintf out "    load(self, ptr) == IF ptr.loc = \"stack\"\n";
-  Format.fprintf out "                        THEN my_stack[self][Len(my_stack[self]) - (ptr.fp + ptr.offs)]\n";
+  Format.fprintf out "    load(stk, ptr) == IF ptr.loc = \"stack\"\n";
+  Format.fprintf out "                        THEN stk[Len(stk) - (ptr.fp + ptr.offs)]\n";
   Format.fprintf out "                        ELSE mem[Len(mem) - ptr.offs]\n";
   Format.fprintf out "end define;\n";
   Format.fprintf out "\n";
@@ -202,10 +262,19 @@ let dump_prog out (prog: pc_prog) =
   Format.fprintf out "    pop(ret);\n";
   Format.fprintf out "end macro;\n";
   Format.fprintf out "\n";
-  Format.fprintf out "macro attr_return_ptr(ret, ptr) begin\n";
-  Format.fprintf out "    ptr := Head(ret);\n";
-  Format.fprintf out "    pop(ret);\n";
-  Format.fprintf out "end macro;\n";
+  Format.fprintf out "procedure init_array(size, arr_ptr) begin\n";
+  Format.fprintf out "  InitArray:\n";
+  Format.fprintf out "  tmpArrayFill := 0;\n";
+  Format.fprintf out "  store(<<>>, arr_ptr);\n";
+  Format.fprintf out "\n";
+  Format.fprintf out "  WhileInitArray:\n";
+  Format.fprintf out "  while(tmpArrayFill < size) do\n";
+  Format.fprintf out "    store(Append(load(my_stack, arr_ptr), UNDEF), arr_ptr);\n";
+  Format.fprintf out "    tmpArrayFill := tmpArrayFill + 1;\n";
+  Format.fprintf out "  end while;\n";
+  Format.fprintf out "\n";
+  Format.fprintf out "  return;\n";
+  Format.fprintf out "end procedure;\n";
   Format.fprintf out "\n";
   Format.fprintf out "procedure stacks_init()\n";
   Format.fprintf out "variables\n";

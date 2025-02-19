@@ -20,3 +20,16 @@ module OutputFile = Self.String
     let arg_name = "output-file"
     let help = "file where the pluscal spec is output."
   end)
+
+module DebugDump = Self.False
+  (struct
+    let option_name = "-debug-dump"
+    let help = "when on (off by default), dumps a .out file useful for translation debug."
+  end)
+
+module BlockMain = Self.False
+  (struct
+    let option_name = "-block-main"
+    let help = "when on (off by default), blocks the main function of the translated PlusCal file,\n
+                just before it returns, to write properties and invariants on variables of the program."
+  end)

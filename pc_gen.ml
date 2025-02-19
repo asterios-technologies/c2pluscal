@@ -35,10 +35,10 @@ let pc_of_cst = function
   | CInt64 (i,_,_) -> Result.ok (PInt(Integer.to_int_exn i))
   | CStr s -> Result.ok (PString s)
   | CChr c -> Result.ok (PString (String.make 1 c))
+  | CEnum e -> Result.ok (PEnumItem e.einame)
   | _ -> Result.error "Cst not treated"
   (* | CWStr of int64 list *)
   (* | CReal of float * fkind * string option *)
-  (* | CEnum of enumitem *)
 
 let exp_to_str = function
   | SizeOfE _ -> "SizeOfE"
@@ -67,65 +67,94 @@ let stmt_to_str = function
 
 let rec pc_of_exp = function
   | Const c -> Result.map (fun pc_cst -> PCst pc_cst) (pc_of_cst c)
-  | Lval lval -> Result.bind (pc_of_lval lval) (fun pc_lval -> Result.ok (PLoad(pc_lval)))
+  | Lval lval -> Result.bind (pc_of_lval lval) (fun pc_lval -> Result.ok (PLval(pc_lval)))
   | UnOp (u,e, _) -> Result.bind (pc_of_unop u) (fun pc_unop ->
                                   Result.map (fun pc_exp -> PUnop(pc_unop,pc_exp)) (pc_of_exp e.enode))
   | BinOp (b, e1, e2, _) -> Result.bind (pc_of_binop b) (fun pc_binop ->
-                                                    Result.bind (pc_of_exp e1.enode) (fun pc_exp1 ->
-                                                      Result.map (fun pc_exp2 -> PBinop(pc_binop,pc_exp1,pc_exp2)) (pc_of_exp e2.enode)))
+                                                Result.bind (pc_of_exp e1.enode) (fun pc_exp1 ->
+                                                  Result.map (fun pc_exp2 -> PBinop(pc_binop,pc_exp1,pc_exp2)) (pc_of_exp e2.enode)))
   | AddrOf lval -> (match fst lval with
-                          |Var vinfo -> Result.ok (PLoad(PLPtr(vinfo.vorig_name,vinfo.vglob)))
-                          |Mem e -> pc_of_exp e.enode)
+                          |Var vinfo -> Result.ok (PAddr(vinfo.vorig_name,vinfo.vglob))
+                          |Mem _ -> Result.error "AddrOf Mem not treated")
   | SizeOf _ -> Result.ok (PCst (PInt 1))
   | CastE(_,e) -> pc_of_exp e.enode
+  | StartOf lval -> (match fst lval with
+                          |Var vinfo -> Result.ok (PAddr(vinfo.vorig_name,vinfo.vglob))
+                          |Mem _ -> Result.error "StartOf Mem not treated")
   | e -> Result.error (Printf.sprintf "Exp not treated %s" (exp_to_str e))
   (* | SizeOfE e -> ()
   | SizeOfStr s -> ()
   | AlignOf t -> ()
-  | AlignOfE e -> ()
-  | StartOf lval -> () *)
+  | AlignOfE e -> () *)
 
 (*Converts a Lval into a PlusCal Lval*)
 and pc_of_lval l =
+  let mem_translate (e: exp) = let pc_exp_mem = pc_of_exp e.enode in
+    (match pc_exp_mem with
+        |Ok PLval(PLVar(ptr_info)) -> Result.ok (PLoad(PLVar(ptr_info)))
+        |Ok PLval(PLoad(pc_lval)) -> Result.ok (PLoad(PLoad(pc_lval)))
+        |Ok PLval(PField(field_info)) -> Result.ok (PField(field_info))
+        |Ok PLval(PIndex(idx_info)) -> Result.ok (PIndex(idx_info))
+        |Ok PBinop(PAddPI,PLval(PLVar(ptr_info)),e2) |Ok PBinop(PSubPI,PLval(PLVar(ptr_info)),e2)
+          -> let pc_exp = add_pc_cst e2 1 in Result.ok (PIndex(pc_exp,PLVar(ptr_info)))
+        |_ -> Result.error "Lval Mem access should be ptr\n")
+  in
+
   match snd l with
   |NoOffset ->
     (match fst l with
-        |Var vinfo -> (match vinfo.vtype with |TPtr _ -> Result.ok (PLPtr(vinfo.vorig_name,vinfo.vglob)) |_ -> Result.ok (PLVar((vinfo.vorig_name,vinfo.vglob))))
-        |Mem e -> let pc_exp_mem = pc_of_exp e.enode in
-                        (match pc_exp_mem with
-                            |Ok PLoad(PLPtr(ptr_info)) -> Result.ok (PLVar(ptr_info))
-                            |_ -> Result.error "Lval Mem access should be ptr\n"))
+        |Var vinfo -> Result.ok (PLVar((vinfo.vorig_name,vinfo.vglob)))
+           (* (match vinfo.vtype with |TPtr _ -> Result.ok (PLPtr(vinfo.vorig_name,vinfo.vglob)) |_ -> Result.ok (PLVar((vinfo.vorig_name,vinfo.vglob)))) *)
+        |Mem e -> mem_translate e)
   |Field(finfo,_) ->
     (match fst l with
-      |Var vinfo -> Result.ok (PField(finfo.fname,(vinfo.vorig_name,vinfo.vglob)))
-      |Mem e -> let pc_exp_mem = pc_of_exp e.enode in
-                      (match pc_exp_mem with
-                          |Ok PLoad(PLPtr(ptr_info)) -> Result.ok (PField(finfo.fname, ptr_info))
-                          |_ -> Result.error "Lval Mem access should be ptr\n"))
-  |Index _ -> Result.error "Index offset not treated"
+      |Var vinfo -> Result.ok (PField(finfo.fname,PLVar(vinfo.vorig_name,vinfo.vglob)))
+      |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
+                      Result.ok (PField(finfo.fname,pc_lval))))
+  |Index(e,_) -> Result.bind (pc_of_exp e.enode) (fun pc_exp ->
+    let pc_exp = add_pc_cst pc_exp 1 in
+    (match fst l with
+    |Var vinfo -> Result.ok (PIndex(pc_exp,PLVar(vinfo.vorig_name,vinfo.vglob)))
+    |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
+                Result.ok (PIndex(pc_exp,pc_lval)))))
 
 let rec init_to_pc_expr (i: init option) =
   match i with
     |None -> PUndef
     |Some init -> match init with
-                    |CompoundInit _ -> struct_to_pc_expr init
+                    |CompoundInit _ -> complex_type_to_pc_expr init
                     |SingleInit e -> match pc_of_exp e.enode with
                                       |Error _ -> PUndef
                                       |Ok ok_exp -> ok_exp
 
-and struct_to_pc_expr (i: init) =
+and complex_type_to_pc_expr (i: init) =
   match i with
   |CompoundInit (_,l) ->
-      let record_result =
-        fold_left_result
-        (fun (offs,i) -> (match offs with
-          |Field(f,_) -> Result.ok (f.fname,init_to_pc_expr (Some i))
-          |Index(_) -> Result.error "Index offset not treated"
-          |_ -> Result.error "Offset should be Field or Index"))
-        (fun acc i -> acc@[i]) [] l
-      in (match record_result with
-            |Error _ -> PUndef
-            |Ok ok_record -> PCst(PRecord(ok_record)))
+    (match List.length l with
+      |0 -> PUndef |_ ->
+      (match List.hd l with
+        |(Field(_),_) -> let record_result =
+                          fold_left_result
+                          (fun (offs,i) -> (match offs with
+                            |Field(f,_) -> Result.ok (f.fname,init_to_pc_expr (Some i))
+                            |Index(_) -> Result.error "Index offset should not appear in struct init"
+                            |_ -> Result.error "Offset should be Field or Index"))
+                          (fun acc i -> acc@[i]) [] l
+                        in (match record_result with
+                              |Error _ -> PUndef
+                              |Ok ok_record -> PCst(PRecord(ok_record)))
+        |(Index(_),_) -> let array_result =
+                          fold_left_result
+                          (fun (offs,i) -> (match offs with
+                            |Index(e,_) -> Result.bind (pc_of_exp e.enode) (fun pc_e ->
+                                            Result.ok (pc_e,init_to_pc_expr (Some i)))
+                            |Field(_) -> Result.error "Field offset should not appear in array init"
+                            |_ -> Result.error "Offset should be Field or Index"))
+                          (fun acc i -> acc@[i]) [] l
+                        in (match array_result with
+                              |Error _ -> PUndef
+                              |Ok ok_array -> PCst(PArray(ok_array)))
+        |_ -> PUndef))
   |_ -> PUndef
 
 (* Return Error if an error occurs in one exp of the list, OK(exp_list) , with exp_list list of pc_expr *)
@@ -141,7 +170,7 @@ let pc_of_instr = function
       |Ok pc_exp_list ->
         let pc_exp = pc_of_exp e.enode in
           (match pc_exp with
-            |Ok PLoad(PLVar(fname,_)) ->
+            |Ok PLval(PLVar(fname,_)) ->
               (match lval_opt with
                 |Some lval -> Result.bind (pc_of_lval lval) (fun pc_lval ->
                                 Result.ok ([PCall(fname, pc_exp_list);
@@ -154,21 +183,24 @@ let pc_of_instr = function
       |AssignInit init -> (match init with
                             |SingleInit e -> let pc_exp = pc_of_exp e.enode in
                                               (match pc_exp with
-                                                |Ok ok_exp ->
-                                                  (match vinfo.vtype with
+                                                |Ok ok_exp -> Result.ok ([PStore(ok_exp,PLVar(vinfo.vorig_name,vinfo.vglob))])
+                                                  (* (match vinfo.vtype with
                                                   |TPtr _ -> Result.ok ([PStore(ok_exp,PLPtr(vinfo.vorig_name,vinfo.vglob))])
-                                                  |_ -> Result.ok ([PStore(ok_exp,PLVar(vinfo.vorig_name,vinfo.vglob))]))
+                                                  |_ -> Result.ok ([PStore(ok_exp,PLVar(vinfo.vorig_name,vinfo.vglob))])) *)
                                                 |Error e -> Error e)
-                            |CompoundInit _ -> let record = struct_to_pc_expr init in
+                            |CompoundInit _ -> let record = complex_type_to_pc_expr init in
                                                  Result.ok ([PStore(record,PLVar(vinfo.vorig_name,vinfo.vglob))]))
       |ConsInit (finfo, args, _) -> (match pc_of_exp_list args with
                                       |Error e -> Error e
                                       |Ok pc_args_list ->
-                                        (match vinfo.vtype with
+                                        Result.ok [PCall(finfo.vorig_name,pc_args_list);
+                                                  PRetAttr(PLVar(vinfo.vorig_name,vinfo.vglob))]
+                                        (* (match vinfo.vtype with
                                           |TPtr _ -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
                                                                 PRetAttr(PLPtr(vinfo.vorig_name,vinfo.vglob))]
                                           |_ -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
-                                                           PRetAttr(PLVar(vinfo.vorig_name,vinfo.vglob))])))
+                                                           PRetAttr(PLVar(vinfo.vorig_name,vinfo.vglob))]) *)
+                                    ))
   | Skip _ -> Result.ok ([])
   | i -> Result.error (Printf.sprintf "Instr not treated %s" (instr_to_str i))
   (* | Asm of attributes * string list * extended_asm option * location
@@ -212,12 +244,18 @@ and pc_of_block b =
   else
     fold_left_result (fun s -> fst (pc_of_stmt s.skind)) (fun acc s_list -> acc@s_list) [] b
 
-let rec procedure_push_vars acc (vars: pc_var list) (is_args: bool) =
+let pc_constant_of_enum (e: enumitem) = match e.eival.enode with
+    | Const(CInt64(i,_,_)) -> Result.ok (e.einame, Integer.to_int_exn i)
+    | _ -> Result.error "Enum item should have cst value"
+
+
+let rec procedure_push_vars acc proc_name (vars: (pc_var * int option) list) (is_args: bool) =
   match vars with
     |[] -> acc
-    |(vname,bool_ptr)::q -> if bool_ptr then procedure_push_vars acc q is_args
-                              else if is_args then procedure_push_vars (PDecl(PArg((vname,bool_ptr)), (vname,false))::acc) q is_args
-                                   else procedure_push_vars (PDecl(PUndef, (vname,false))::acc) q is_args
+    |(vname, Some array_size)::q -> if is_args then procedure_push_vars (PCopy((vname,false), (vname_to_string proc_name vname,false))::acc) proc_name q is_args
+                                    else procedure_push_vars (PDecl(PUndef, (vname,false))::(PInitArray(array_size,(vname,false))::acc)) proc_name q is_args
+    |(vname, None)::q -> if is_args then procedure_push_vars (PDecl(PArg((vname)), (vname,false))::acc) proc_name q is_args
+                         else procedure_push_vars (PDecl(PUndef, (vname,false))::acc) proc_name q is_args
 
 let rec procedure_pop acc n =
   match n with
@@ -229,16 +267,19 @@ class gen_pc (prog: pc_prog ref) = object
 
   val child_to_skip = ref 0;
 
-  method! vfile _ =
+  method! vfile f =
+    let entry_point = List.hd (List.rev
+      (List.filter_map (fun g -> match g with |GFun(fundec,_) -> Some fundec.svar.vorig_name |_ -> None) f.globals)) in
     let name = get_file_name() in
     let nb_process =  1 in
     let processus = [{pc_process_name="proc";
                       pc_process_set="PROCESS";
                       pc_process_vars=[];
-                      pc_process_body=[PAwaitInit;PCall("main",[])]}]
+                      pc_process_body=[PAwaitInit;PCall(entry_point,[])]}]
     in
       prog := {!prog with
                pc_prog_name = name;
+               pc_entry_point = entry_point;
                pc_nb_process = nb_process;
                pc_processus = processus};
       Cil.DoChildrenPost(fun f ->
@@ -246,8 +287,10 @@ class gen_pc (prog: pc_prog ref) = object
           {pc_process_name="globalInit";
           pc_process_set="GLOBAL_INIT";
           pc_process_vars=[];
-          pc_process_body=(List.fold_left (fun acc ((name,_),expr) ->
-            (PDecl(expr, (name,true))::acc)) [] (!prog).pc_glob_var)@[PInitDone]}
+          pc_process_body=(List.fold_left (fun acc ((name, int_opt),expr) ->
+            match int_opt with
+              |Some array_size -> (PDecl(PUndef, (name,true))::(PInitArray(array_size,(name,true))::acc))
+              |None -> (PDecl(expr, (name,true))::acc)) [] (!prog).pc_glob_var)@[PInitDone]}
         in
         prog := {!prog with
                   pc_processus = glob_init_process::(!prog).pc_processus};f)
@@ -255,30 +298,41 @@ class gen_pc (prog: pc_prog ref) = object
   method! vglob_aux g =
     match g with
       | GVar(varinfo, initinfo, _) -> prog := {!prog with
-                                          pc_glob_var = (varinfo_to_pcvar varinfo,init_to_pc_expr initinfo.init)
+                                          pc_glob_var = (varinfo_to_pc_decl varinfo,init_to_pc_expr initinfo.init)
                                                         ::(!prog).pc_glob_var;};
                                       Cil.DoChildren
       | GCompTag(compinfo, _) -> if compinfo.cstruct then Cil.DoChildren
                                  else (Printf.eprintf "Union not supported"; Cil.DoChildren)
+      | GEnumTag (enuminfo,_) -> (match fold_left_result (fun e -> pc_constant_of_enum e) (fun acc e -> acc@[e]) [] enuminfo.eitems with
+                                  |Error e -> Printf.eprintf "Error : %s" e; Cil.DoChildren
+                                  |Ok enum_items ->
+                                    prog := {!prog with
+                                      pc_constants = (!prog).pc_constants@enum_items};
+                                    Cil.DoChildren)
       | GFun(fundec, _) ->  Cfg.prepareCFG fundec;
-                            let args = List.map (varinfo_to_pcvar) fundec.sformals in
-                             let vars = List.map (varinfo_to_pcvar) fundec.slocals in
-                             let args_decl = procedure_push_vars [] args true in
-                             let vars_decl = procedure_push_vars [] vars false in
+                            let proc_name = fundec.svar.vorig_name in
+                            let args = List.map (varinfo_to_pc_decl) fundec.sformals in
+                             let vars = List.map (varinfo_to_pc_decl) fundec.slocals in
+                             let args_decl = procedure_push_vars [] proc_name args true in
+                             let vars_decl = procedure_push_vars [] proc_name vars false in
                              let pop_list = procedure_pop [] (List.length args_decl + List.length vars_decl) in
                               prog := {!prog with
-                                      pc_procedures = {pc_procedure_name=fundec.svar.vorig_name;
-                                                       pc_procedure_args=args;
-                                                       pc_procedure_vars=vars;
+                                      pc_procedures = {pc_procedure_name=proc_name;
+                                                       pc_procedure_args=List.map (varinfo_to_pcvar) fundec.sformals;
+                                                       pc_procedure_vars=List.map (varinfo_to_pcvar) fundec.slocals;
                                                        pc_procedure_body=args_decl@vars_decl}
                                                       ::(!prog).pc_procedures;};
                              Cil.DoChildrenPost(fun g ->
                               match (!prog).pc_procedures with
-                              |curr_proc::q -> prog :=
-                                {!prog with
-                                pc_procedures = {curr_proc with
+                              |curr_proc::q ->
+                                let block = if Options.BlockMain.get() && curr_proc.pc_procedure_name = (!prog).pc_entry_point
+                                  then [PBlock] else []
+                                in
+                                prog :={!prog with
+                                  pc_procedures = {curr_proc with
                                                   pc_procedure_body=
                                                   curr_proc.pc_procedure_body@
+                                                  block@
                                                   pop_list}
                                                 ::q;}; g
                               |[] -> Printf.eprintf "Error no procedure"; g)
@@ -290,7 +344,6 @@ class gen_pc (prog: pc_prog ref) = object
       | GType(typeinfo, loc) -> Format.fprintf out "GType : "; Format.pp_print_string out typeinfo.torig_name; Format.pp_print_string out typeinfo.tname ; Printer.pp_typ out typeinfo.ttype; Format.pp_print_bool out typeinfo.treferenced; Printer.pp_location out loc;
         Cil.DoChildrenPost (fun g -> Format.fprintf out "End GType \n"; g)
       | GCompTagDecl(compinfo, loc) -> Format.fprintf out "GCompTagDecl : "; Printer.pp_compinfo out compinfo; Printer.pp_location out loc; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GCompTagDecl \n"; g)
-      | GEnumTag _ -> Format.fprintf out "GEnumTag : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GEnumTag \n"; g)
       | GEnumTagDecl _ -> Format.fprintf out "GEnumTagDecl : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GEnumTagDecl \n"; g)
       | GVarDecl(varinfo, loc) -> Format.fprintf out "GVarDecl : "; Printer.pp_varinfo out varinfo; Printer.pp_location out loc; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GVarDecl \n"; g)
       | GFunDecl(funspec, varinfo, loc) -> Format.fprintf out "GFunDecl : "; Printer.pp_funspec out funspec ; Printer.pp_varinfo out varinfo; Printer.pp_location out loc;
