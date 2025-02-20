@@ -72,7 +72,7 @@ let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
                           Format.fprintf out "%s)" break_lbl;
   |PReturn(e) -> Format.fprintf out "PReturn(";print_pc_expr out e;Format.fprintf out ")";
   |PDecl(e,(ptr,_)) -> Format.fprintf out "PDecl(";print_pc_expr out e;Format.fprintf out ",%s)" ptr;
-  |PCopy((ptr,_),(ptr_dst,_)) -> Format.fprintf out "PCopy(%s,%s)" ptr ptr_dst;
+  |PCopy(e,(ptr_dst,_)) -> Format.fprintf out "PCopy(";print_pc_expr out e;Format.fprintf out ",%s)" ptr_dst;
   |PPop -> Format.fprintf out "PPop()";
   |PRetAttr(lval) -> Format.fprintf out "PRetAttr(PLVal(";print_pc_lval out lval;
                      Format.fprintf out ")";Format.fprintf out ")";
@@ -81,7 +81,6 @@ let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
   |PInitDone -> Format.fprintf out "PInitDone";
   |PAwaitInit -> Format.fprintf out "PAwaitInit"
   |PSkip -> Format.fprintf out "PSkip"
-  |PBlock -> Format.fprintf out "PBlock"
   |PInitArray(size,(ptr,_)) -> Format.fprintf out "PInitArray(%d,%s)" size ptr
 
 

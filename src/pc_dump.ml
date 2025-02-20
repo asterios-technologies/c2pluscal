@@ -41,11 +41,6 @@ let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
     Format.fprintf out ">>"
   |PEnumItem item_name -> Format.fprintf out "%s" item_name
 
-(* and dump_pc_lval (proc_name: string) out (lval: pc_lval) = match lval with
-   PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
-  |PLPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
-  |PField(field,ptr) -> Format.fprintf out "" *)
-
 and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
   PCst(cst) -> dump_pc_cst proc_name out cst;
   |PBinop(binop,e1,e2) -> (match is_binop_ptr binop with
@@ -144,7 +139,7 @@ let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
                     Format.fprintf out "%sskip;\n" indent;
   |PReturn(e) -> Format.fprintf out "push(ret, ";dump_pc_expr proc_name out e;Format.fprintf out ");\n";
   |PDecl(e,ptr) -> Format.fprintf out "decl(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
-  |PCopy(ptr,ptr_dst) -> Format.fprintf out "%s := %s;\n" (ptr_to_string proc_name ptr_dst) (ptr_to_string proc_name ptr);
+  |PCopy(e,ptr_dst) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr_dst);dump_pc_expr proc_name out e;Format.fprintf out ";\n";
   |PPop -> Format.fprintf out "pop(my_stack);\n";
   |PRetAttr(lval) -> (match lval with
                       |PLVar(ptr) -> Format.fprintf out "attr_return(ret, %s);\n" (ptr_to_string proc_name ptr);
@@ -170,7 +165,6 @@ let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
   |PInitDone -> Format.fprintf out "initDone := TRUE;\n"
   |PAwaitInit -> Format.fprintf out "await initDone = TRUE;\n"
   |PSkip -> Format.fprintf out "skip;"
-  |PBlock -> Format.fprintf out "await FALSE;\n"
   |PInitArray(size,ptr) -> Format.fprintf out "call init_array(%d,%s);\n" size (ptr_to_string proc_name ptr)
 
 and dump_pc_instr out (info: dump_info) (i: pc_instr) =

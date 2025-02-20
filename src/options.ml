@@ -29,7 +29,7 @@ module DebugDump = Self.False
 
 module BlockMain = Self.False
   (struct
-    let option_name = "-block-main"
-    let help = "when on (off by default), blocks the main function of the translated PlusCal file,\n
+    let option_name = "-check-main"
+    let help = "when on (off by default), add a label to the main function of the translated PlusCal file,\n
                 just before it returns, to write properties and invariants on variables of the program."
   end)

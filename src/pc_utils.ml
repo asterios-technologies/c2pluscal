@@ -26,11 +26,7 @@ let varinfo_to_pcvar (v: varinfo) = (v.vorig_name)
 
 let varinfo_to_pc_decl (v: varinfo) =
     match v.vtype with
-        |TArray(_,e,_) -> (match e with
-                            | Some exp -> (match exp.enode with
-                                            |Const(CInt64(i,_,_)) -> (v.vorig_name, Some (Integer.to_int_exn i))
-                                            |_ -> (v.vorig_name, None))
-                            | None -> (v.vorig_name, Some (0)))
+        |TArray(_,e,_) -> (v.vorig_name, (Some (Cil.lenOfArray e)))
         |_ -> (v.vorig_name, None)
 
 let rec dump_list out l dump_fun =
@@ -61,3 +57,36 @@ let add_pc_cst (e: pc_expr) (n: int) =
     match e with
         |PCst(PInt(i)) -> PCst(PInt(i+n))
         |_ -> e
+
+let get_entry_point (f: file) =
+    List.hd (List.rev
+        (List.filter_map (fun g ->
+            match g with
+                |GFun(fundec,_) -> Some fundec.svar.vorig_name
+                |_ -> None)
+        f.globals))
+
+(*Detects all the StartOf op (i.e. array conversion to ptr) in functions calls in a stmts list
+  and add the array args index in a hashtable with the function name as key
+
+  @params
+    fun_array_args_table : hashtable with function name as key and a list of args index as value
+    stms : list of stmts to analyze*)
+let detect_array_args (array_args_table: (string, int) Hashtbl.t)  (stmts: stmt list) =
+    List.iter (fun s ->
+        match s.skind with
+            |Instr i -> (match i with
+                |Call(_,e, args, _) -> (match e.enode with
+                    |Lval(Var vinfo, NoOffset) ->
+                        (List.iteri (fun i arg -> match arg.enode with
+                            |StartOf(_) -> Hashtbl.add array_args_table vinfo.vorig_name i
+                            |_ -> ()) args)
+                    |_ -> ())
+                |_ -> ())
+            |_ -> ()) stmts
+
+let get_all_array_args (array_args_table: (string, int) Hashtbl.t) (globals: global list) =
+    List.iter (fun g ->
+        match g with
+            |GFun(fundec,_) -> (detect_array_args array_args_table fundec.sbody.bstmts)
+            |_ -> ()) globals;

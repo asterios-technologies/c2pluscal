@@ -1,6 +1,7 @@
 open Pc
 
 let run() =
+    if Options.Enabled.get() then
     try
         let prog = ref ({pc_prog_name="";
                         pc_constants=[];
@@ -21,7 +22,7 @@ let run() =
         if Options.DebugDump.get() then
             let out_chan = open_out (String.concat "" [(!prog).pc_prog_name;".dump"]) in
             let out_fmt = Format.formatter_of_out_channel out_chan in
-            Pc_print.print_prog out_fmt !prog;
+            Pc_debug.print_prog out_fmt !prog;
             close_out out_chan;
     with Sys_error _ as exc ->
         let msg = Printexc.to_string exc in

@@ -249,13 +249,18 @@ let pc_constant_of_enum (e: enumitem) = match e.eival.enode with
     | _ -> Result.error "Enum item should have cst value"
 
 
-let rec procedure_push_vars acc proc_name (vars: (pc_var * int option) list) (is_args: bool) =
+let rec procedure_push_vars acc (vars: (pc_var * int option) list) (args_info: (bool * int list * int))  =
+  let (is_args, array_args_idx, nb_args) = args_info in
+  let (decl_list, nb_decl) = acc in
   match vars with
     |[] -> acc
-    |(vname, Some array_size)::q -> if is_args then procedure_push_vars (PCopy((vname,false), (vname_to_string proc_name vname,false))::acc) proc_name q is_args
-                                    else procedure_push_vars (PDecl(PUndef, (vname,false))::(PInitArray(array_size,(vname,false))::acc)) proc_name q is_args
-    |(vname, None)::q -> if is_args then procedure_push_vars (PDecl(PArg((vname)), (vname,false))::acc) proc_name q is_args
-                         else procedure_push_vars (PDecl(PUndef, (vname,false))::acc) proc_name q is_args
+    |(vname, Some array_size)::q -> procedure_push_vars ((PDecl(PUndef, (vname,false))::(PInitArray(array_size,(vname,false))::decl_list)),nb_decl+1) q args_info
+    |(vname, None)::q -> if is_args
+                         then let idx = nb_args - ((List.length q)+1) in
+                              if List.mem idx array_args_idx
+                              then procedure_push_vars ((PDecl(PUndef, (vname,false))::(PCopy(PArg(vname),(vname, false))::decl_list)),nb_decl+1) q args_info
+                              else procedure_push_vars ((PDecl(PArg((vname)), (vname,false))::decl_list),nb_decl+1) q args_info
+                         else procedure_push_vars ((PDecl(PUndef, (vname,false))::decl_list),nb_decl+1) q args_info
 
 let rec procedure_pop acc n =
   match n with
@@ -266,10 +271,10 @@ class gen_pc (prog: pc_prog ref) = object
   inherit Visitor.frama_c_inplace
 
   val child_to_skip = ref 0;
+  val array_args_table = ref (Hashtbl.create 100);
 
   method! vfile f =
-    let entry_point = List.hd (List.rev
-      (List.filter_map (fun g -> match g with |GFun(fundec,_) -> Some fundec.svar.vorig_name |_ -> None) f.globals)) in
+    let entry_point = get_entry_point f in
     let name = get_file_name() in
     let nb_process =  1 in
     let processus = [{pc_process_name="proc";
@@ -277,6 +282,7 @@ class gen_pc (prog: pc_prog ref) = object
                       pc_process_vars=[];
                       pc_process_body=[PAwaitInit;PCall(entry_point,[])]}]
     in
+      get_all_array_args !array_args_table f.globals;
       prog := {!prog with
                pc_prog_name = name;
                pc_entry_point = entry_point;
@@ -312,10 +318,10 @@ class gen_pc (prog: pc_prog ref) = object
       | GFun(fundec, _) ->  Cfg.prepareCFG fundec;
                             let proc_name = fundec.svar.vorig_name in
                             let args = List.map (varinfo_to_pc_decl) fundec.sformals in
-                             let vars = List.map (varinfo_to_pc_decl) fundec.slocals in
-                             let args_decl = procedure_push_vars [] proc_name args true in
-                             let vars_decl = procedure_push_vars [] proc_name vars false in
-                             let pop_list = procedure_pop [] (List.length args_decl + List.length vars_decl) in
+                            let vars = List.map (varinfo_to_pc_decl) fundec.slocals in
+                            let (args_decl,nb_args_decl) = procedure_push_vars ([],0) args (true,(Hashtbl.find_all !array_args_table proc_name),(List.length args)) in
+                            let (vars_decl,nb_vars_decl) = procedure_push_vars ([],0) vars (false,[],0) in
+                            let pop_list = procedure_pop [] (nb_args_decl + nb_vars_decl) in
                               prog := {!prog with
                                       pc_procedures = {pc_procedure_name=proc_name;
                                                        pc_procedure_args=List.map (varinfo_to_pcvar) fundec.sformals;
@@ -326,7 +332,7 @@ class gen_pc (prog: pc_prog ref) = object
                               match (!prog).pc_procedures with
                               |curr_proc::q ->
                                 let block = if Options.BlockMain.get() && curr_proc.pc_procedure_name = (!prog).pc_entry_point
-                                  then [PBlock] else []
+                                  then [PLabel("Check:");PSkip] else []
                                 in
                                 prog :={!prog with
                                   pc_procedures = {curr_proc with

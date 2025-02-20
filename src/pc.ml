@@ -1,5 +1,5 @@
 type pc_label = string (*Label of a line*)
-type pc_ptr = (string * bool) (*Ptr : ptr name * is_ptr, eg. bool flag telling if the ptr is global or not*)
+type pc_ptr = (string * bool) (*Ptr : ptr name * is_glob, eg. bool flag telling if the ptr is global or not*)
 type pc_var = (string) (*Var : var name*)
 
 (*BINOP*)
@@ -47,14 +47,13 @@ type pc_instr = PStore of pc_expr * pc_lval (*store : expr to store * ptr to sto
                 |PWhile of pc_instr list * (pc_label)
                 |PReturn of pc_expr (*return : return expr*)
                 |PDecl of pc_expr * pc_ptr (*var decl : expr to assign * ptr to assign*)
-                |PCopy of pc_ptr * pc_ptr (*copy : ptr to copy * ptr to copy to*)
+                |PCopy of pc_expr * pc_ptr (*copy : expr to copy * ptr to copy to*)
                 |PPop (*pop op*)
                 |PRetAttr of pc_lval (*get return value : ptr to store, comes after a PCall*)
                 |PGoto of pc_label (*goto op : label to go*)
                 |PAwaitInit (*await init is finished flag*)
                 |PInitDone (*init is finished flag*)
                 |PSkip (*skip*)
-                |PBlock (*block execution of program*)
                 |PInitArray of int * pc_ptr (*init array : size of array * ptr to array*)
 
 (*PROCEDURE*)
