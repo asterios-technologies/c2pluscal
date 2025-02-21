@@ -27,9 +27,18 @@ module DebugDump = Self.False
     let help = "when on (off by default), dumps a .out file useful for translation debug."
   end)
 
-module BlockMain = Self.False
+module CheckFun = Self.String_list
   (struct
-    let option_name = "-check-main"
-    let help = "when on (off by default), add a label to the main function of the translated PlusCal file,\n
-                just before it returns, to write properties and invariants on variables of the program."
+    let option_name = "-check-label"
+    let help = "add a label to the functions whose name is given, in the translated PlusCal file,\n
+                just before they return, to write properties and invariants on variables of the program."
+    let arg_name = "fun_list"
+  end)
+
+module ExpectVal = Self.String
+  (struct
+    let option_name = "-expect"
+    let default = ""
+    let arg_name = "expect-file"
+    let help = "given file with the expecting value of variables of the program."
   end)

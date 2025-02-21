@@ -7,9 +7,10 @@ type pc_binop = PAdd | PSub | PMul | PDiv | PMod
               | PAddPI | PSubPI | PSubPP
               | PLt | PGt | PLe | PGe | PEq | PNe
               | PLand | PLor
+              | PShiftL | PShiftR |PBand | PBor | PBxor
 
 (*UNOP*)
-type pc_unop = PMinus | PNot
+type pc_unop = PMinus | PNot |PBnot
 
 (*CST*)
 type pc_cst = PInt of int
@@ -32,7 +33,7 @@ and pc_expr = PCst of pc_cst (*constant value : cst*)
               |PUnop of pc_unop * pc_expr (*unop : unop * fst op*)
               |PUndef (*undef for empty decl*)
               |PLval of pc_lval (*lvalue*)
-              |PAddr of pc_ptr (*address of a var : ptr to take addr of*)
+              |PAddr of pc_lval (*address of a var : lval to take addr of*)
 
 (*TYPE FOR TYPEOK*)
 type pc_type = PStruct of string * (string list) (*struct : struct name * (field name list) *)

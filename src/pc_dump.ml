@@ -22,11 +22,17 @@ let dump_pc_binop out (b: pc_binop) = match b with
   | PNe -> Format.fprintf out "/=";
   | PLand -> Format.fprintf out "/\\";
   | PLor -> Format.fprintf out "\\/";
+  | PShiftL -> Format.fprintf out "* 2^";
+  | PShiftR -> Format.fprintf out "\\div 2^";
+  | PBand -> Format.fprintf out "&";
+  | PBor -> Format.fprintf out "|";
+  | PBxor -> Format.fprintf out "^^";
   |_ -> Format.fprintf out "Error: non-ptr op expected"
 
 let dump_pc_unop out (u: pc_unop) = match u with
   |PMinus -> Format.fprintf out "-";
   |PNot -> Format.fprintf out "~"
+  |PBnot -> Format.fprintf out "Not"
 
 let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
   |PInt(i) -> Format.fprintf out "%s" (string_of_int i);
@@ -42,31 +48,57 @@ let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
   |PEnumItem item_name -> Format.fprintf out "%s" item_name
 
 and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
-  PCst(cst) -> dump_pc_cst proc_name out cst;
-  |PBinop(binop,e1,e2) -> (match is_binop_ptr binop with
-                            |true ->
-                              Format.fprintf out "(";
-                              dump_pc_binop_ptr out proc_name binop e1 e2;
-                              Format.fprintf out ")";
-                            |false ->
-                              Format.fprintf out "(";dump_pc_expr proc_name out e1;
-                              dump_pc_binop out binop;
-                              dump_pc_expr proc_name out e2;Format.fprintf out ")";)
-  |PUnop(unop,exp) -> Format.fprintf out "(";dump_pc_unop out unop;
-                      dump_pc_expr proc_name out exp;Format.fprintf out ")";
-  |PUndef -> Format.fprintf out "UNDEF";
-  |PLval(lval) -> (match lval with
-                    |PLVar(ptr) -> Format.fprintf out "load(my_stack,%s)" (ptr_to_string proc_name ptr);
-                    (* |PLPtr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr); *)
-                    |PLoad(lval_prime) -> Format.fprintf out "load(my_stack,load(my_stack,";dump_pc_lval out proc_name lval_prime;Format.fprintf out "))";
-                    |PField(field,lval_prime) -> Format.fprintf out "load(my_stack,";dump_pc_lval out proc_name lval_prime;Format.fprintf out ").%s" field;
-                    |PIndex(idx,lval_prime) -> Format.fprintf out "load(my_stack,";
-                                               dump_pc_lval out proc_name lval_prime;
-                                               Format.fprintf out ")[";
-                                               (dump_pc_expr proc_name out idx);
-                                               Format.fprintf out "]")
-  |PArg(v) -> dump_arg proc_name out v
-  |PAddr(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
+  | PCst(cst) -> dump_pc_cst proc_name out cst
+  | PBinop(binop, e1, e2) -> (match is_binop_ptr binop with
+                              | true ->
+                                  Format.fprintf out "(";
+                                  dump_pc_binop_ptr out proc_name binop e1 e2;
+                                  Format.fprintf out ")"
+                              | false ->
+                                  Format.fprintf out "(";
+                                  dump_pc_expr proc_name out e1;
+                                  dump_pc_binop out binop;
+                                  dump_pc_expr proc_name out e2;
+                                  Format.fprintf out ")")
+  | PUnop(unop, exp) ->
+      Format.fprintf out "(";
+      dump_pc_unop out unop;
+      Format.fprintf out "(";
+      dump_pc_expr proc_name out exp;
+      Format.fprintf out "))"
+  | PUndef -> Format.fprintf out "UNDEF"
+  | PLval(lval) -> (match lval with
+                    | PLVar(ptr) -> Format.fprintf out "load(my_stack, %s)" (ptr_to_string proc_name ptr)
+                    | PLoad(lval_prime) ->
+                        Format.fprintf out "load(my_stack, load(my_stack, ";
+                        dump_pc_lval out proc_name lval_prime;
+                        Format.fprintf out "))"
+                    | PField(field, lval_prime) ->
+                        Format.fprintf out "load(my_stack, ";
+                        dump_pc_lval out proc_name lval_prime;
+                        Format.fprintf out ").%s" field
+                    | PIndex(idx, lval_prime) ->
+                        Format.fprintf out "load(my_stack, ";
+                        dump_pc_lval out proc_name lval_prime;
+                        Format.fprintf out ")[";
+                        dump_pc_expr proc_name out idx;
+                        Format.fprintf out "]")
+  | PArg(v) -> dump_arg proc_name out v
+  | PAddr(lval) -> (match lval with
+                    | PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
+                    | PLoad(lval_prime) ->
+                        Format.fprintf out "load(my_stack, ";
+                        dump_pc_lval out proc_name lval_prime;
+                        Format.fprintf out ")"
+                    | _ -> Format.fprintf out "Error: lval not treated")
+
+and dump_pc_addr_expr proc_name out lval = match lval with
+  | PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
+  | PLoad(lval_prime) ->
+    Format.fprintf out "load(my_stack,";
+    dump_pc_lval out proc_name lval_prime;
+    Format.fprintf out ")"
+  | _ -> Format.fprintf out "Error: lval not treated"
 
 and dump_pc_lval out (proc_name: string) (lval: pc_lval) = match lval with
   |PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
@@ -80,22 +112,35 @@ and dump_pc_lval out (proc_name: string) (lval: pc_lval) = match lval with
                             (dump_pc_expr proc_name out idx);
                             Format.fprintf out "]"
 
+and string_of_pc_expr (proc_name: string) (exp: pc_expr) : string =
+    let buffer = Buffer.create 256 in
+    let formatter = Format.formatter_of_buffer buffer in
+    dump_pc_expr proc_name formatter exp;
+    Format.pp_print_flush formatter ();
+    Buffer.contents buffer
+
+and string_of_pc_lval (proc_name: string) (lval: pc_lval) = match lval with
+  |PLVar(ptr) -> "load(my_stack,"^(ptr_to_string proc_name ptr)^")"
+  |PLoad(lval_prime) -> "load(my_stack,"^string_of_pc_lval proc_name lval_prime^")"
+  |PField(field,lval_prime) -> "load(my_stack,"^string_of_pc_lval proc_name lval_prime^")"^"."^field
+  |PIndex(idx,lval_prime) -> "load(my_stack,"^string_of_pc_lval proc_name lval_prime^")["^(string_of_pc_expr proc_name idx)^"]"
+
 (* Our stack grows backward -> should invert arithmetic operations *)
 and dump_pc_binop_ptr out (proc_name: string) (b: pc_binop) (e1: pc_expr) (e2: pc_expr) =
   (match e1 with
-    |PLval(PLVar(ptr)) -> let ptr_string = (ptr_to_string proc_name ptr) in
+    |PLval(lval) -> let ptr_string = string_of_pc_lval proc_name lval in
                   (match b with
-                    | PAddPI -> Format.fprintf out "[loc |-> load(my_stack,%s).loc, fp |-> load(my_stack,%s).fp, offs |-> load(my_stack,%s).offs-" ptr_string ptr_string ptr_string;
+                    | PAddPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs-" ptr_string ptr_string ptr_string;
                                 dump_pc_expr proc_name out e2; Format.fprintf out "]";
-                    | PSubPI -> Format.fprintf out "[loc |-> load(my_stack,%s).loc, fp |-> load(my_stack,%s).fp, offs |-> load(my_stack,%s).offs+" ptr_string ptr_string ptr_string;
+                    | PSubPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+" ptr_string ptr_string ptr_string;
                                 dump_pc_expr proc_name out e2; Format.fprintf out "]";
                     | PSubPP -> (match e2 with
-                                  |PLval(PLVar(ptr2)) -> let ptr2_string = (ptr_to_string proc_name ptr2) in
-                                    Format.fprintf out "[loc |-> load(my_stack,%s).loc, fp |-> load(my_stack,%s).fp, offs |-> load(my_stack,%s).offs+load(my_stack,%s).offs]"
+                                  |PLval(lval2) -> let ptr2_string = string_of_pc_lval proc_name lval2 in
+                                    Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+%s.offs]"
                                     ptr_string ptr_string ptr_string ptr2_string;
-                                  |_ -> Format.fprintf out "Error: ptr snd op expected")
-                    | _ -> Format.fprintf out "Error: ptr fst op expected")
-    |_ -> Format.fprintf out "Error: ptr operand expected")
+                                  |_ -> Format.fprintf out "Error: lval snd op expected")
+                    | _ -> Format.fprintf out "Error: lval fst op expected")
+    |_ -> Format.fprintf out "Error: lval operand expected")
 
 let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
   let label,proc_name,line,indent = info in match i_type with
@@ -203,7 +248,7 @@ let dump_constant out (cst: string) =
 
 let dump_prog out (prog: pc_prog) =
   Format.fprintf out "------------------------------ MODULE %s ------------------------------\n" prog.pc_prog_name;
-  Format.fprintf out "EXTENDS Integers, FiniteSets, Sequences\n";
+  Format.fprintf out "EXTENDS Integers, FiniteSets, Sequences, Bitwise\n";
   Format.fprintf out "CONSTANT ";
   dump_list out (List.map (fun proc -> proc.pc_process_set) prog.pc_processus) (dump_constant);
   Format.fprintf out ",UNDEF,\n";

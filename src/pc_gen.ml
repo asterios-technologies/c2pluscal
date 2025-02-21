@@ -5,7 +5,7 @@ open Pc_utils
 let pc_of_unop = function
   | Neg -> Result.ok PMinus
   | LNot -> Result.ok PNot
-  | BNot -> Result.error "Unop not treated"
+  | BNot -> Result.ok PBnot
 
 let pc_of_binop = function
   | PlusA -> Result.ok PAdd
@@ -24,19 +24,18 @@ let pc_of_binop = function
   | Ne -> Result.ok PNe
   | LAnd -> Result.ok PLand
   | LOr -> Result.ok PLor
-  | _ -> Result.error "Binop not treated"
-  (* | BAnd
-  | BXor
-  | BOr
   | Shiftlt -> Result.ok PShiftL
-  | Shiftrt -> Result.ok PShiftR *)
+  | Shiftrt -> Result.ok PShiftR
+  | BAnd -> Result.ok PBand
+  | BXor -> Result.ok PBxor
+  | BOr -> Result.ok PBor
 
 let pc_of_cst = function
   | CInt64 (i,_,_) -> Result.ok (PInt(Integer.to_int_exn i))
   | CStr s -> Result.ok (PString s)
   | CChr c -> Result.ok (PString (String.make 1 c))
   | CEnum e -> Result.ok (PEnumItem e.einame)
-  | _ -> Result.error "Cst not treated"
+  | _ -> Result.error "Cst not treated\n"
   (* | CWStr of int64 list *)
   (* | CReal of float * fkind * string option *)
 
@@ -74,32 +73,35 @@ let rec pc_of_exp = function
                                                 Result.bind (pc_of_exp e1.enode) (fun pc_exp1 ->
                                                   Result.map (fun pc_exp2 -> PBinop(pc_binop,pc_exp1,pc_exp2)) (pc_of_exp e2.enode)))
   | AddrOf lval -> (match fst lval with
-                          |Var vinfo -> Result.ok (PAddr(vinfo.vorig_name,vinfo.vglob))
-                          |Mem _ -> Result.error "AddrOf Mem not treated")
+                          |Var vinfo -> Result.ok (PAddr(PLVar(vinfo.vorig_name,vinfo.vglob)))
+                          |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
+                                      Result.ok (PAddr(pc_lval))))
   | SizeOf _ -> Result.ok (PCst (PInt 1))
   | CastE(_,e) -> pc_of_exp e.enode
   | StartOf lval -> (match fst lval with
-                          |Var vinfo -> Result.ok (PAddr(vinfo.vorig_name,vinfo.vglob))
-                          |Mem _ -> Result.error "StartOf Mem not treated")
-  | e -> Result.error (Printf.sprintf "Exp not treated %s" (exp_to_str e))
+                          |Var vinfo -> Result.ok (PAddr(PLVar(vinfo.vorig_name,vinfo.vglob)))
+                          |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
+                                      Result.ok (PAddr(pc_lval))))
+  | e -> Result.error (Printf.sprintf "Exp not treated %s\n" (exp_to_str e))
   (* | SizeOfE e -> ()
   | SizeOfStr s -> ()
   | AlignOf t -> ()
   | AlignOfE e -> () *)
 
+(*Translates a memory access*)
+and mem_translate (e: exp) = let pc_exp_mem = pc_of_exp e.enode in
+  (match pc_exp_mem with
+      |Ok PLval(PLVar(ptr_info)) -> Result.ok (PLoad(PLVar(ptr_info)))
+      |Ok PLval(PLoad(pc_lval)) -> Result.ok (PLoad(PLoad(pc_lval)))
+      |Ok PLval(PField(field_info)) -> Result.ok (PField(field_info))
+      |Ok PLval(PIndex(idx_info)) -> Result.ok (PIndex(idx_info))
+      |Ok PBinop(PAddPI,PLval(pc_lval),e2) |Ok PBinop(PSubPI,PLval(pc_lval),e2)
+        -> let pc_exp = add_pc_cst e2 1 in Result.ok (PIndex(pc_exp,pc_lval))
+      |Ok PBinop(PSubPP,PLval(pc_lval),PLval(pc_lval2)) ->  Result.ok (PIndex(PLval(pc_lval2),pc_lval))
+      |_ -> Result.error "Lval Mem access should be ptr\n")
+
 (*Converts a Lval into a PlusCal Lval*)
 and pc_of_lval l =
-  let mem_translate (e: exp) = let pc_exp_mem = pc_of_exp e.enode in
-    (match pc_exp_mem with
-        |Ok PLval(PLVar(ptr_info)) -> Result.ok (PLoad(PLVar(ptr_info)))
-        |Ok PLval(PLoad(pc_lval)) -> Result.ok (PLoad(PLoad(pc_lval)))
-        |Ok PLval(PField(field_info)) -> Result.ok (PField(field_info))
-        |Ok PLval(PIndex(idx_info)) -> Result.ok (PIndex(idx_info))
-        |Ok PBinop(PAddPI,PLval(PLVar(ptr_info)),e2) |Ok PBinop(PSubPI,PLval(PLVar(ptr_info)),e2)
-          -> let pc_exp = add_pc_cst e2 1 in Result.ok (PIndex(pc_exp,PLVar(ptr_info)))
-        |_ -> Result.error "Lval Mem access should be ptr\n")
-  in
-
   match snd l with
   |NoOffset ->
     (match fst l with
@@ -307,8 +309,7 @@ class gen_pc (prog: pc_prog ref) = object
                                           pc_glob_var = (varinfo_to_pc_decl varinfo,init_to_pc_expr initinfo.init)
                                                         ::(!prog).pc_glob_var;};
                                       Cil.DoChildren
-      | GCompTag(compinfo, _) -> if compinfo.cstruct then Cil.DoChildren
-                                 else (Printf.eprintf "Union not supported"; Cil.DoChildren)
+      | GCompTag(_, _) -> Cil.DoChildren
       | GEnumTag (enuminfo,_) -> (match fold_left_result (fun e -> pc_constant_of_enum e) (fun acc e -> acc@[e]) [] enuminfo.eitems with
                                   |Error e -> Printf.eprintf "Error : %s" e; Cil.DoChildren
                                   |Ok enum_items ->
@@ -331,8 +332,8 @@ class gen_pc (prog: pc_prog ref) = object
                              Cil.DoChildrenPost(fun g ->
                               match (!prog).pc_procedures with
                               |curr_proc::q ->
-                                let block = if Options.BlockMain.get() && curr_proc.pc_procedure_name = (!prog).pc_entry_point
-                                  then [PLabel("Check:");PSkip] else []
+                                let block = if (List.mem (curr_proc.pc_procedure_name) (Options.CheckFun.get()))
+                                  then [PLabel("Check_"^curr_proc.pc_procedure_name^":");PSkip] else []
                                 in
                                 prog :={!prog with
                                   pc_procedures = {curr_proc with
