@@ -20,10 +20,16 @@ let print_pc_binop out (b: pc_binop) = match b with
   | PNe -> Format.fprintf out "PNe";
   | PLand -> Format.fprintf out "PLand";
   | PLor -> Format.fprintf out "PLor"
+  | PShiftL -> Format.fprintf out "PShiftL"
+  | PShiftR -> Format.fprintf out "PShiftR"
+  | PBand -> Format.fprintf out "PBand"
+  | PBor -> Format.fprintf out "PBor"
+  | PBxor -> Format.fprintf out "PBxor"
 
 let print_pc_unop out (u: pc_unop) = match u with
   |PMinus -> Format.fprintf out "PMinus";
   |PNot -> Format.fprintf out "PNot"
+  |PBnot -> Format.fprintf out "PBnot"
 
 let rec print_pc_cst out (c: pc_cst) = match c with
   |PInt(i) -> Format.fprintf out "PInt(%s)" (string_of_int i);
@@ -59,7 +65,7 @@ and print_pc_expr out (exp: pc_expr) = match exp with
   |PLval(lval) -> Format.fprintf out "PLoad(PLVal(";print_pc_lval out lval;
                   Format.fprintf out ")";Format.fprintf out ")";
   |PArg((vname)) -> Format.fprintf out "PArg(%s)" vname;
-  |PAddr((ptr,_)) -> Format.fprintf out "PAddr(%s)" ptr
+  |PAddr(lval) -> Format.fprintf out "PAddr(";print_pc_lval out lval;Format.fprintf out ")"
 
 let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
   PStore(e,lval) -> Format.fprintf out "PStore(";print_pc_expr out e;Format.fprintf out ",PLVal(";print_pc_lval out lval;

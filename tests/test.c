@@ -62,6 +62,13 @@ int main() {
     int k = 0;
     int t = 0;
 
+    int l = 2;
+    int r = 41;
+    int band = 13 & 11;
+    int bor = 13 | 11;
+    int bxor = 13 ^ 11;
+    int bnot = ~13;
+
     int* ptr = &z;
     int** ptr_ptr = &ptr;
 
@@ -105,6 +112,9 @@ int main() {
     glob_arr[5] = 1;
     ptr_arr[0]->name = "test";
     t = simple_arr[2];
+
+    l = l << 3;
+    r = r >> 2;
 
     return 0;
 }

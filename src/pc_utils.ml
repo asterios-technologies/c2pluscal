@@ -3,7 +3,8 @@ open Pc
 
 let get_file_name() =
     let full_name =  Filepath.Normalized.to_pretty_string (List.hd (Kernel.Files.get())) in
-    String.sub full_name 0 (String.length full_name - 2)
+    let base_name = Filename.basename full_name in
+    String.sub base_name 0 (String.length base_name - 2)
 
 let is_binop_ptr (b: pc_binop) = match b with
     | PAddPI | PSubPI | PSubPP -> true
