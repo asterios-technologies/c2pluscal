@@ -1,83 +1,92 @@
-type pc_label = string (*Label of a line*)
-type pc_ptr = (string * bool) (*Ptr : ptr name * is_glob, eg. bool flag telling if the ptr is global or not*)
-type pc_var = (string) (*Var : var name*)
+(* Label of a line *)
+type pc_label = string
+(* Pointer: name and a flag indicating if it is global *)
+type pc_ptr = (string * bool)
+(* Variable: name *)
+type pc_var = string
 
-(*BINOP*)
+(* Binary Operators *)
 type pc_binop = PAdd | PSub | PMul | PDiv | PMod
               | PAddPI | PSubPI | PSubPP
               | PLt | PGt | PLe | PGe | PEq | PNe
               | PLand | PLor
-              | PShiftL | PShiftR |PBand | PBor | PBxor
+              | PShiftL | PShiftR | PBand | PBor | PBxor
 
-(*UNOP*)
-type pc_unop = PMinus | PNot |PBnot
+(* Unary Operators *)
+type pc_unop = PMinus | PNot | PBnot
 
-(*CST*)
+(* Constants *)
 type pc_cst = PInt of int
-              |PString of string
-              |PRecord of (string * pc_expr) list (*Record type : [a |-> ..., b |-> ..., etc]*)
-              |PArray of (pc_expr * pc_expr) list (*Array type : [a,b,etc]*)
-              |PEnumItem of string (*Enum item*)
+            | PString of string
+            | PRecord of (string * pc_expr) list (* Record type: ["a" |-> e1, "b" |-> e2, etc] *)
+            | PArray of pc_expr list (* Array type: [a, b, etc] *)
+            | PEnumItem of string (* Enum item *)
 
-(*LVALUE*)
-and pc_lval = |PLVar of pc_ptr
-              (* |PLPtr of pc_ptr *)
-              |PLoad of pc_lval (*load a ptr : ptr to load*)
-              |PField of (string * pc_lval) (*Field of a record : name of field * name of ptr*)
-              |PIndex of (pc_expr * pc_lval) (*Index of an array : ptr * index*)
+(* LValue *)
+and pc_lval = PLVar of pc_ptr
+            | PLoad of pc_lval (* Load a pointer: pointer to load *)
+            | PField of (string * pc_lval) (* Field of a record: name of field * pointer of record *)
+            | PIndex of (pc_expr * pc_lval) (* Index of an array: index expression * pointer of array *)
 
-(*EXPR*)
-and pc_expr = PCst of pc_cst (*constant value : cst*)
-              |PArg of pc_var (*arg of func : arg name*)
-              |PBinop of pc_binop * pc_expr * pc_expr (*binop : binop * fst op * snd op*)
-              |PUnop of pc_unop * pc_expr (*unop : unop * fst op*)
-              |PUndef (*undef for empty decl*)
-              |PLval of pc_lval (*lvalue*)
-              |PAddr of pc_lval (*address of a var : lval to take addr of*)
+(* Expression *)
+and pc_expr = PCst of pc_cst (* Constant value: constant *)
+            | PArg of pc_var (* Argument of function: argument name *)
+            | PBinop of pc_binop * pc_expr * pc_expr (* Binary operator: operator * first operand * second operand *)
+            | PUnop of pc_unop * pc_expr (* Unary operator: operator * operand *)
+            | PUndef (* Undefined for empty declaration *)
+            | PLval of pc_lval (* Lvalue *)
+            | PAddr of pc_lval (* Address of a variable: lvalue to take address of *)
 
-(*TYPE FOR TYPEOK*)
-type pc_type = PStruct of string * (string list) (*struct : struct name * (field name list) *)
-               |PEnum of string * (string list) (*enum : enum name * (enum item list)*)
+(* PlusCal Type *)
+(* Useful for TypeOK generation, not implemented yet *)
+type pc_type = PStruct of string * (string list) (* Struct: struct name * (field name list) *)
+             | PEnum of string * (string list) (* Enum: enum name * (enum item list) *)
 
-(*INSTR*)
-type pc_instr = PStore of pc_expr * pc_lval (*store : expr to store * ptr to store*)
-                |PCall of string * (pc_expr list) (*func call : func name * arg list*)
-                |PIf of pc_expr * (pc_instr list) * (pc_instr list) (*if : cond * true instr list * false instr list*)
-                |PLabel of pc_label (*label : name of label to write*)
-                (*loop: block of instr of the loop * (break instr * label)*)
-                |PWhile of pc_instr list * (pc_label)
-                |PReturn of pc_expr (*return : return expr*)
-                |PDecl of pc_expr * pc_ptr (*var decl : expr to assign * ptr to assign*)
-                |PCopy of pc_expr * pc_ptr (*copy : expr to copy * ptr to copy to*)
-                |PPop (*pop op*)
-                |PRetAttr of pc_lval (*get return value : ptr to store, comes after a PCall*)
-                |PGoto of pc_label (*goto op : label to go*)
-                |PAwaitInit (*await init is finished flag*)
-                |PInitDone (*init is finished flag*)
-                |PSkip (*skip*)
-                |PInitArray of int * pc_ptr (*init array : size of array * ptr to array*)
+(* Instruction *)
+type pc_instr = PStore of pc_expr * pc_lval (* Store: expression to store * pointer into which store *)
+              | PCall of string * (pc_expr list) (* Function call: function name * argument list *)
+              | PIf of pc_expr * (pc_instr list) * (pc_instr list) (* If: condition * true instruction list * false instruction list *)
+              | PLabel of pc_label (* Label: name of label to write *)
+              | PWhile of pc_instr list * (pc_label) (* While loop : instr of loop * break label *)
+              | PReturn of pc_expr (* Return: return expression *)
+              | PDecl of pc_expr * pc_ptr (* Variable declaration: expression to assign * pointer to assign *)
+              | PCopy of pc_expr * pc_ptr (* Copy: expression to copy * pointer to copy to *)
+              | PPop (* Pop operation *)
+              | PRetAttr of pc_lval (* Get return value: pointer into which store, comes after a PCall *)
+              | PGoto of pc_label (* Goto operation: label to go *)
+              | PAwaitInit (* Await global variables initialization is finished *)
+              | PInitDone (* Global variables initialization is finished *)
+              | PSkip (* Skip *)
+              | PInitArray of int * pc_ptr (* Init array: size of array * pointer to array *)
 
-(*PROCEDURE*)
-type pc_procedure = { pc_procedure_name: string; (*name of procedure*)
-                      pc_procedure_args: pc_var list; (*args name of procedure*)
-                      pc_procedure_vars: pc_var list; (*local vars of procedure*)
-                      pc_procedure_body: pc_instr list; (*procedure instrs*)
+(* Procedure *)
+type pc_procedure = { pc_procedure_name: string; (* Name of procedure *)
+                      pc_procedure_args: pc_var list; (* Argument names of procedure *)
+                      pc_procedure_vars: pc_var list; (* Local variables of procedure *)
+                      pc_procedure_body: pc_instr list; (* Procedure instructions *)
                     }
 
-(*PROCESS*)
-type pc_process = { pc_process_name: string; (*process name*)
-                    pc_process_set: string; (*set in which process is taken, ex : process core \in CORES -> pc_process_set = CORES*)
-                    pc_process_vars: pc_var list; (*local vars of process*)
-                    pc_process_body: pc_instr list; (*process instrs*)
+(* Process *)
+type pc_process = { pc_process_name: string; (* Process name *)
+
+                    (* Set in which process is taken
+                    Example: process core \in CORES -> pc_process_set = CORES *)
+                    pc_process_set: string;
+                    pc_process_vars: pc_var list; (* Local variables of process *)
+                    pc_process_body: pc_instr list; (* Process instructions *)
                   }
 
-(*PROG*)
-type pc_prog = { pc_prog_name: string; (*program name*)
-                 pc_constants: (pc_var * int) list; (*constants of the program*)
-                 pc_glob_var: ((pc_var * int option) * pc_expr) list; (*prog glob vars with decl*)
-                 pc_nb_process: int; (*nb of process*)
-                 pc_processus: pc_process list; (*list of process*)
-                 pc_entry_point: string; (*entry point of the program*)
-                 pc_procedures: pc_procedure list; (*list of procedures*)
+(* Program *)
+type pc_prog = { pc_prog_name: string; (* Program name *)
+                 pc_constants: (pc_var * int) list; (* Constants of the program *)
+
+                 (* Global program variables with their names and array sizes,
+                 if applicable, along with their declarations *)
+                 pc_glob_var: ((pc_var * int option) * pc_expr) list;
+
+                 pc_nb_process: int; (* Number of processes *)
+                 pc_processus: pc_process list; (* List of processes *)
+                 pc_entry_point: string; (* Entry point of the program *)
+                 pc_procedures: pc_procedure list; (* List of procedures *)
                }
 

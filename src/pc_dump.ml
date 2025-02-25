@@ -1,15 +1,49 @@
+(**
+    Dump a PlusCal program.
+**)
+
 open Pc
 open Pc_utils
 
-type dump_info = string * string * int * string (* label, proc_name, line, indent_space*)
+(**
+  Type representing information to be dumped.
+  - @param label string representing the label.
+  - @param proc_name string representing the procedure name.
+  - @param line integer representing the line number.
+  - @param indent_space string representing the indentation space.
+**)
+type dump_info = string * string * int * string
 
+
+(**
+  Outputs the variable declaration for a given procedure variable.
+  - @param out formatter to output the variable declaration
+  - @param proc_name name of the procedure
+  - @param v_name procedure variable to be declared
+**)
 let dump_proc_var out (proc_name: string) ((v_name): pc_var) =
   Format.fprintf out "    %s = [loc |-> \"stack\", fp |-> Len(my_stack), offs |-> 0];\n" (vname_to_string proc_name v_name)
 
+
+(**
+  Outputs the string representation of a PlusCal argument of a procedure.
+  - @param proc_name name of the procedure to which the variable belongs.
+  - @param out formatter to which the variable's string representation is printed.
+  - @param v PlusCal arg to be printed.
+**)
 let dump_arg (proc_name: string) out (v: pc_var) =  Format.fprintf out "%s" (arg_to_string proc_name v)
 
+
+(**
+  Prints the string representation of the given
+  PlusCal binary operator [b] to the formatter [out].
+  - @param out formatter to which the binary operator will be printed.
+  - @param b PlusCal binary operator to be printed. It can be one of the following:
+
+  This function does not handle the pointer operations.
+**)
 let dump_pc_binop out (b: pc_binop) = match b with
-  PAdd -> Format.fprintf out "+";
+  | PAdd -> Format.fprintf out "+";
   | PSub -> Format.fprintf out "-";
   | PMul -> Format.fprintf out "*";
   | PDiv -> Format.fprintf out "/";
@@ -27,7 +61,7 @@ let dump_pc_binop out (b: pc_binop) = match b with
   | PBand -> Format.fprintf out "&";
   | PBor -> Format.fprintf out "|";
   | PBxor -> Format.fprintf out "^^";
-  |_ -> Format.fprintf out "Error: non-ptr op expected"
+  |_ -> Format.fprintf out "Error dump_pc_binop: non-ptr operation expected"
 
 let dump_pc_unop out (u: pc_unop) = match u with
   |PMinus -> Format.fprintf out "-";
@@ -43,7 +77,7 @@ let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
                   dump_pc_expr proc_name out exp;);
                 Format.fprintf out "]"
   |PArray l -> Format.fprintf out "<<";
-    dump_list out l (fun out (_,exp) -> dump_pc_expr proc_name out exp;);
+    dump_list out l (fun out exp -> dump_pc_expr proc_name out exp;);
     Format.fprintf out ">>"
   |PEnumItem item_name -> Format.fprintf out "%s" item_name
 
