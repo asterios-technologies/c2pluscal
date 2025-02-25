@@ -2,279 +2,434 @@ open Cil_types
 open Pc
 open Pc_utils
 
+(**
+  Converts a unary operation to its corresponding PlusCal representation.
+  - @param unop unary operation to convert.
+  - @return [Result] containing the PlusCal unary operation or an error message.
+**)
 let pc_of_unop = function
-  | Neg -> Result.ok PMinus
-  | LNot -> Result.ok PNot
-  | BNot -> Result.ok PBnot
+  | Neg -> PMinus
+  | LNot -> PNot
+  | BNot -> PBnot
 
+
+(**
+  Converts a unary operation to its corresponding PlusCal representation.
+  - @param binop binary operation to convert.
+  - @return [Result] containing the PlusCal binary operation or an error message.
+**)
 let pc_of_binop = function
-  | PlusA -> Result.ok PAdd
-  | PlusPI -> Result.ok PAddPI
-  | MinusA -> Result.ok PSub
-  | MinusPI -> Result.ok PSubPI
-  | MinusPP -> Result.ok PSubPP
-  | Mult -> Result.ok PMul
-  | Div -> Result.ok PDiv
-  | Mod -> Result.ok PMod
-  | Lt -> Result.ok PLt
-  | Gt -> Result.ok PGt
-  | Le -> Result.ok PLe
-  | Ge -> Result.ok PGe
-  | Eq -> Result.ok PEq
-  | Ne -> Result.ok PNe
-  | LAnd -> Result.ok PLand
-  | LOr -> Result.ok PLor
-  | Shiftlt -> Result.ok PShiftL
-  | Shiftrt -> Result.ok PShiftR
-  | BAnd -> Result.ok PBand
-  | BXor -> Result.ok PBxor
-  | BOr -> Result.ok PBor
+  | PlusA -> PAdd | PlusPI -> PAddPI
+  | MinusA -> PSub | MinusPI -> PSubPI | MinusPP -> PSubPP
+  | Mult -> PMul | Div -> PDiv | Mod -> PMod
+  | Lt -> PLt | Gt -> PGt | Le -> PLe | Ge -> PGe
+  | Eq -> PEq | Ne -> PNe
+  | LAnd -> PLand | LOr -> PLor
+  | Shiftlt -> PShiftL | Shiftrt -> PShiftR
+  | BAnd -> PBand | BXor -> PBxor | BOr -> PBor
 
+
+(**
+  Converts a constant to a PlusCal expression.
+    - @param cst constant to convert.
+    - @return [Result] containing the PlusCal constant or an error message.
+
+  The function does not handle the following cases :
+    - [CWStr] : Wide character string
+    - [CReal] : Floating point number
+**)
 let pc_of_cst = function
-  | CInt64 (i,_,_) -> Result.ok (PInt(Integer.to_int_exn i))
-  | CStr s -> Result.ok (PString s)
-  | CChr c -> Result.ok (PString (String.make 1 c))
-  | CEnum e -> Result.ok (PEnumItem e.einame)
-  | _ -> Result.error "Cst not treated\n"
-  (* | CWStr of int64 list *)
-  (* | CReal of float * fkind * string option *)
+  | CInt64 (int,_,_) -> (try Result.ok (PInt(Integer.to_int_exn int)) with
+                           | _ -> Result.error "Integer out of range")
+  | CStr str -> Result.ok (PString str)
+  | CChr char -> Result.ok (PString (String.make 1 char))
+  | CEnum item -> Result.ok (PEnumItem item.einame)
+  | _ -> Result.error "Constant not treated"
 
-let exp_to_str = function
-  | SizeOfE _ -> "SizeOfE"
-  | SizeOfStr _ -> "SizeOfStr"
-  | AlignOf _ -> "AlignOf"
-  | AlignOfE _ -> "AlignOfE"
-  | CastE _ -> "CastE"
-  | StartOf _ -> "StartOf"
-  |_ -> ""
 
-let instr_to_str = function
-  | Asm _ -> "Asm"
-  | Skip _ -> "Skip"
-  | Code_annot _ -> "Code Annot"
-  |_ -> ""
+(**
+  Recursively translates an expression into its PlusCal representation.
+  - @param exp expression to be translated.
+  - @return [Result] containing the PlusCal expression or an error message.
 
-let stmt_to_str = function
-  | TryFinally _ | TryExcept _ | TryCatch _ -> "Try"
-  | Throw _ -> "Throw"
-  | Break _ -> "Break"
-  | Continue _ -> "Continue"
-  | Switch _ -> "Switch"
-  | Loop _ -> "Loop"
-  | UnspecifiedSequence _ -> "UnspecifiedSequence"
-  | _ -> ""
-
+  The function does not handle the following cases :
+    - [SizeOf]
+    - [AlignOf]
+**)
 let rec pc_of_exp = function
-  | Const c -> Result.map (fun pc_cst -> PCst pc_cst) (pc_of_cst c)
-  | Lval lval -> Result.bind (pc_of_lval lval) (fun pc_lval -> Result.ok (PLval(pc_lval)))
-  | UnOp (u,e, _) -> Result.bind (pc_of_unop u) (fun pc_unop ->
-                                  Result.map (fun pc_exp -> PUnop(pc_unop,pc_exp)) (pc_of_exp e.enode))
-  | BinOp (b, e1, e2, _) -> Result.bind (pc_of_binop b) (fun pc_binop ->
-                                                Result.bind (pc_of_exp e1.enode) (fun pc_exp1 ->
-                                                  Result.map (fun pc_exp2 -> PBinop(pc_binop,pc_exp1,pc_exp2)) (pc_of_exp e2.enode)))
-  | AddrOf lval -> (match fst lval with
-                          |Var vinfo -> Result.ok (PAddr(PLVar(vinfo.vorig_name,vinfo.vglob)))
-                          |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
-                                      Result.ok (PAddr(pc_lval))))
-  | SizeOf _ -> Result.ok (PCst (PInt 1))
+  (*C constant*)
+  | Const c ->
+      pc_of_cst c
+      |> Result.map (fun pc_cst -> PCst pc_cst)
+
+  (*Lvalue*)
+  | Lval lval ->
+    pc_of_lval lval
+    |> Result.map (fun pc_lval -> PLval pc_lval)
+
+  (*Unary operation*)
+  | UnOp (u,e, _) ->
+      let pc_unop = pc_of_unop u in
+      pc_of_exp e.enode
+      |> Result.map (fun pc_exp -> PUnop (pc_unop,pc_exp))
+
+  (*Binary operation*)
+  | BinOp (b, e1, e2, _) ->
+      let pc_binop = pc_of_binop b in
+      Result.bind (pc_of_exp e1.enode) (fun pc_exp1 ->
+        pc_of_exp e2.enode
+        |> Result.map (fun pc_exp2 -> PBinop (pc_binop,pc_exp1,pc_exp2)))
+
+  (*Address of an lvalue*)
+  | AddrOf lval
+  | StartOf lval ->
+      (*[AddrOf] takes the address of an lvalue
+        [StartOf] converts an array to a pointer when passed to a function.
+        Our PlusCal representation treats arrays as variables, so we treat [StartOf] as [AddrOf].
+
+        We have two cases :
+        1. Address of a variable.
+        2. Address from memory access, handled by an external function [mem_translate].*)
+      (match fst lval with
+        | Var vinfo -> Result.ok (PAddr (PLVar (vinfo.vorig_name, vinfo.vglob)))
+        | Mem e -> pc_of_mec_access e
+                   |> Result.map (fun pc_lval -> PAddr (pc_lval))
+      )
+
+  (*Cast of an expression*)
   | CastE(_,e) -> pc_of_exp e.enode
-  | StartOf lval -> (match fst lval with
-                          |Var vinfo -> Result.ok (PAddr(PLVar(vinfo.vorig_name,vinfo.vglob)))
-                          |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
-                                      Result.ok (PAddr(pc_lval))))
-  | e -> Result.error (Printf.sprintf "Exp not treated %s\n" (exp_to_str e))
-  (* | SizeOfE e -> ()
-  | SizeOfStr s -> ()
-  | AlignOf t -> ()
-  | AlignOfE e -> () *)
+  | e -> Result.error (Printf.sprintf "Expression not treated: %s\n" (exp_to_str e))
 
-(*Translates a memory access*)
-and mem_translate (e: exp) = let pc_exp_mem = pc_of_exp e.enode in
+
+(**
+  Translates a memory access expression [e] into a PlusCal expression.
+  It uses the [pc_of_exp] function to convert the expression node [e.enode] into a PlusCal expression.
+  - @param e expression to be translated.
+  - @return [Result] containing the translated PlusCal expression or an error message.
+**)
+and pc_of_mec_access (e: exp) = Result.bind (pc_of_exp e.enode) (fun pc_exp_mem ->
   (match pc_exp_mem with
-      |Ok PLval(PLVar(ptr_info)) -> Result.ok (PLoad(PLVar(ptr_info)))
-      |Ok PLval(PLoad(pc_lval)) -> Result.ok (PLoad(PLoad(pc_lval)))
-      |Ok PLval(PField(field_info)) -> Result.ok (PField(field_info))
-      |Ok PLval(PIndex(idx_info)) -> Result.ok (PIndex(idx_info))
-      |Ok PBinop(PAddPI,PLval(pc_lval),e2) |Ok PBinop(PSubPI,PLval(pc_lval),e2)
-        -> let pc_exp = add_pc_cst e2 1 in Result.ok (PIndex(pc_exp,pc_lval))
-      |Ok PBinop(PSubPP,PLval(pc_lval),PLval(pc_lval2)) ->  Result.ok (PIndex(PLval(pc_lval2),pc_lval))
-      |_ -> Result.error "Lval Mem access should be ptr\n")
+    (*Converts access to variable or pointer into load operation*)
+    (*Example : *x
+        - (pc_of_exp) -> PLVal(PLVar(x))
+        - (pc_of_mec_access) -> PLoad(PLVal(PLVar(x)))
 
-(*Converts a Lval into a PlusCal Lval*)
-and pc_of_lval l =
-  match snd l with
-  |NoOffset ->
-    (match fst l with
-        |Var vinfo -> Result.ok (PLVar((vinfo.vorig_name,vinfo.vglob)))
-           (* (match vinfo.vtype with |TPtr _ -> Result.ok (PLPtr(vinfo.vorig_name,vinfo.vglob)) |_ -> Result.ok (PLVar((vinfo.vorig_name,vinfo.vglob)))) *)
-        |Mem e -> mem_translate e)
-  |Field(finfo,_) ->
-    (match fst l with
-      |Var vinfo -> Result.ok (PField(finfo.fname,PLVar(vinfo.vorig_name,vinfo.vglob)))
-      |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
-                      Result.ok (PField(finfo.fname,pc_lval))))
-  |Index(e,_) -> Result.bind (pc_of_exp e.enode) (fun pc_exp ->
-    let pc_exp = add_pc_cst pc_exp 1 in
-    (match fst l with
-    |Var vinfo -> Result.ok (PIndex(pc_exp,PLVar(vinfo.vorig_name,vinfo.vglob)))
-    |Mem e -> Result.bind (mem_translate e) (fun pc_lval ->
-                Result.ok (PIndex(pc_exp,pc_lval)))))
+                **x
+        - (pc_of_exp) -> PLVal(PLVar(x))
+        - (pc_of_mec_access) -> PLoad(PLVal(PLVar(x)))
+        - (pc_of_mec_access) -> PLoad(PLoad(PLVal(PLVar(x))))*)
+    | PLval (PLVar (ptr_info)) -> Result.ok (PLoad (PLVar (ptr_info)))
+    | PLval (PLoad (pc_lval)) -> Result.ok (PLoad (PLoad (pc_lval)))
 
+    (*Does not change access to a field or index, because our they are not stored in the stack as in C*)
+    | PLval (PField (field_info)) -> Result.ok (PField (field_info))
+    | PLval (PIndex (idx_info)) -> Result.ok (PIndex (idx_info))
+
+    (* Converts a binary pointer operation to an index access *)
+    (* Example : arr[2]
+        - (pc_of_exp) -> PBinop(PAddPI, PLval(arr), PCst(2))
+        - (pc_of_mec_access) -> PIndex(PCst(2), PLval(arr)) *)
+    | PBinop (PAddPI, PLval (pc_lval), e2)
+    | PBinop (PSubPI, PLval (pc_lval), e2) ->
+      (*Add 1 to the index, because TLA sequences indexes begins at 1*)
+      let pc_exp = add_pc_cst e2 1 in Result.ok (PIndex (pc_exp, pc_lval))
+
+    (*Example : arr[i]
+        - (pc_of_exp) -> PBinop(PAddPI, PLval(arr), PLVal(i))
+        - (pc_of_mec_access) -> PIndex(PLVal(i), PLVal(arr))*)
+    | PBinop (PSubPP, PLval (pc_lval), PLval (pc_lval2)) ->  Result.ok (PIndex (PLval (pc_lval2), pc_lval))
+    | _ -> Result.error (Printf.sprintf "Memory access not treated: %s" (exp_to_str e.enode))
+  ))
+
+
+(**
+  Converts a left-hand value (lval) into a PlusCal representation.
+  Different cases of lvals to handle are variables, fields, and indexed elements.
+  - @param lval lvalue to be translated.
+  - @return [Result] containing the translated PlusCal lvalue or an error message.
+**)
+and pc_of_lval = function
+  (*Converts a lvalue with no offset into a PlusCal variable.*)
+  | Var vinfo, NoOffset -> Result.ok (PLVar ((vinfo.vorig_name, vinfo.vglob)))
+  | Mem e, NoOffset -> pc_of_mec_access e
+
+  (*Converts a lvalue field into a PlusCal field.*)
+  | Var vinfo, Field(finfo,_) ->
+      Result.ok (PField (finfo.fname, PLVar (vinfo.vorig_name, vinfo.vglob)))
+  | Mem e, Field(finfo,_) ->
+      pc_of_mec_access e
+      |> Result.map (fun pc_lval ->
+         PField (finfo.fname, pc_lval))
+
+  (*Converts a lvalue indexed element into a PlusCal index.*)
+  | Var vinfo, Index(e,_) ->
+    pc_of_exp e.enode
+    |> Result.map (fun pc_exp ->
+      (*Add 1 to the index, because TLA sequences indexes begins at 1*)
+      let pc_exp = add_pc_cst pc_exp 1 in
+      PIndex (pc_exp, PLVar (vinfo.vorig_name, vinfo.vglob)))
+  | Mem e, Index(e',_) ->
+    Result.bind (pc_of_exp e'.enode) (fun pc_exp ->
+      (*Add 1 to the index, because TLA sequences indexes begins at 1*)
+      let pc_exp = add_pc_cst pc_exp 1 in
+      pc_of_mec_access e
+      |> Result.map (fun pc_lval ->
+         PIndex (pc_exp, pc_lval)))
+
+
+(**
+  Converts an optional initialization expression to a PlusCal expression.
+  @param i optional initialization expression of type [init option].
+  @return [Result] containing the translated PlusCal initialization or an error message.
+**)
 let rec init_to_pc_expr (i: init option) =
   match i with
-    |None -> PUndef
-    |Some init -> match init with
-                    |CompoundInit _ -> complex_type_to_pc_expr init
-                    |SingleInit e -> match pc_of_exp e.enode with
-                                      |Error _ -> PUndef
-                                      |Ok ok_exp -> ok_exp
+    (*No init -> PUndef*)
+    | None -> Result.ok PUndef
+    | Some init ->
+       match init with
+        | CompoundInit _ -> complex_type_to_pc_expr init
+        | SingleInit e -> pc_of_exp e.enode
 
+(**
+  Converts a complex initialization type (array, struct, etc) to a PlusCal expression.
+  - @param i initialization to be converted.
+  - @return [Result] containing the PlusCal initialization or an error message.
+**)
 and complex_type_to_pc_expr (i: init) =
   match i with
-  |CompoundInit (_,l) ->
-    (match List.length l with
-      |0 -> PUndef |_ ->
-      (match List.hd l with
-        |(Field(_),_) -> let record_result =
-                          fold_left_result
-                          (fun (offs,i) -> (match offs with
-                            |Field(f,_) -> Result.ok (f.fname,init_to_pc_expr (Some i))
-                            |Index(_) -> Result.error "Index offset should not appear in struct init"
-                            |_ -> Result.error "Offset should be Field or Index"))
-                          (fun acc i -> acc@[i]) [] l
-                        in (match record_result with
-                              |Error _ -> PUndef
-                              |Ok ok_record -> PCst(PRecord(ok_record)))
-        |(Index(_),_) -> let array_result =
-                          fold_left_result
-                          (fun (offs,i) -> (match offs with
-                            |Index(e,_) -> Result.bind (pc_of_exp e.enode) (fun pc_e ->
-                                            Result.ok (pc_e,init_to_pc_expr (Some i)))
-                            |Field(_) -> Result.error "Field offset should not appear in array init"
-                            |_ -> Result.error "Offset should be Field or Index"))
-                          (fun acc i -> acc@[i]) [] l
-                        in (match array_result with
-                              |Error _ -> PUndef
-                              |Ok ok_array -> PCst(PArray(ok_array)))
-        |_ -> PUndef))
-  |_ -> PUndef
+  | CompoundInit (_, l) -> handle_compound_init l
+  | _ -> Result.error "complex_type_to_pc_expr entry should be CompoundInit"
 
-(* Return Error if an error occurs in one exp of the list, OK(exp_list) , with exp_list list of pc_expr *)
+(**
+  Handles the initialization of compound types (records or arrays).
+  @param l list of tuples where each tuple consists of an offset and an initializer.
+  @return [Result] containing parsed compound initializer or an error message.
+**)
+and handle_compound_init l =
+  match List.length l with
+  | 0 -> Result.ok PUndef
+  (*Checks the first element of the list to know which type of init*)
+  | _ -> (match List.hd l with
+          | (Field(_), _) -> handle_record_init l
+          | (Index(_), _) -> handle_array_init l
+          | _ -> Result.error "Offset should be Index or Field in compound init"
+         )
+
+(**
+  @function handle_record_init
+  @param l list of tuples where each tuple consists of a field offset and an initializer.
+  @return [Result] containing parsed record initializer or an error message.
+
+  @function handle_array_init
+  @param l list of tuples where each tuple consists of an index offset and an initializer.
+  @return [Result] containing parsed array initializer or an error message.
+**)
+and handle_record_init l =
+  (*Result list of (string * pc_expr) to initialize the record*)
+  let record_result =
+    fold_left_result
+      (fun (offs, i) -> match offs with
+         | Field(f, _) -> init_to_pc_expr (Some i) |> Result.map (fun ok_init -> (f.fname, ok_init))
+         | _ -> Result.error "Offset should be Field in struct init")
+      (fun acc i -> acc @ [i]) [] l
+  in
+  record_result |> Result.map (fun ok_record -> PCst (PRecord ok_record))
+
+and handle_array_init l =
+  (*Result list of (pc_expr * pc_expr) to initialize the array*)
+  let array_result =
+    fold_left_result
+      (fun (offs, i) -> match offs with
+         | Index(e, _) -> Result.bind (pc_of_exp e.enode) (fun pc_e ->
+                            init_to_pc_expr (Some i)
+                            |> Result.map (fun ok_init -> (pc_e, ok_init)))
+         | _ -> Result.error "Offset should be Index in array init")
+      (fun acc i -> acc @ [i]) [] l
+  in
+  array_result |> Result.map (fun ok_array -> PCst (PArray ok_array))
+
+
+(**
+  Takes a list of expressions [l] and processes each expression
+  It accumulates the Ok results in a list, starting with an empty list.
+
+  @param l list of expressions to be processed.
+  @return [Result] containing the list of processed expressions or an error if any expression fails to process.
+*)
 let pc_of_exp_list l = fold_left_result (fun e -> pc_of_exp e.enode) (fun acc e -> acc@[e]) [] l
 
+
+(** Converts an instruction to a PlusCal representation.
+  @param instr instruction to convert.
+  @return [Result] containing a list of PlusCal instructions or an error message.
+
+  The function does not handle the following cases :
+    - [Asm] : Assembly code
+    - [Code_annot] : Code annotation
+**)
 let pc_of_instr = function
-  | Set(lval, e, _) -> Result.bind (pc_of_exp e.enode) (fun pc_exp ->
-                                    Result.bind (pc_of_lval lval) (fun pc_lval ->
-                                      Result.ok ([PStore(pc_exp, pc_lval)])))
+  (*Assignment*)
+  | Set(lval, e, _) ->
+      Result.bind (pc_of_exp e.enode) (fun pc_exp ->
+        pc_of_lval lval
+        |> Result.map (fun pc_lval ->
+           ([PStore (pc_exp, pc_lval)])))
+
+  (*Function call*)
+  (*lval option as call result*)
+  (*expression to store function as a variable*)
+  (*expression list used store function's args*)
   | Call(lval_opt, e, e_list, _) ->
-    (match pc_of_exp_list e_list with
-      |Error e -> Error e
-      |Ok pc_exp_list ->
-        let pc_exp = pc_of_exp e.enode in
+      Result.bind (pc_of_exp_list e_list) (fun pc_exp_list ->
+        Result.bind (pc_of_exp e.enode) (fun pc_exp ->
           (match pc_exp with
-            |Ok PLval(PLVar(fname,_)) ->
+            | PLval (PLVar (fname, _)) ->
               (match lval_opt with
                 |Some lval -> Result.bind (pc_of_lval lval) (fun pc_lval ->
-                                Result.ok ([PCall(fname, pc_exp_list);
-                                            PRetAttr((pc_lval))]))
-                |None -> Result.ok ([PCall(fname, pc_exp_list)]))
-            |Ok _ -> Error "Call instr should have PLoad(PLVar()) exp"
-            |Error e -> Error e))
+                                Result.ok ([PCall (fname, pc_exp_list);
+                                            PRetAttr ((pc_lval))]))
+                |None -> Result.ok ([PCall (fname, pc_exp_list)])
+              )
+            | _ -> Result.error "Call instr should have PLval(PLVar()) exp"
+          )))
+
+  (*Initialization of a variable*)
   | Local_init (vinfo, local_init, _) ->
     (match local_init with
-      |AssignInit init -> (match init with
-                            |SingleInit e -> let pc_exp = pc_of_exp e.enode in
-                                              (match pc_exp with
-                                                |Ok ok_exp -> Result.ok ([PStore(ok_exp,PLVar(vinfo.vorig_name,vinfo.vglob))])
-                                                  (* (match vinfo.vtype with
-                                                  |TPtr _ -> Result.ok ([PStore(ok_exp,PLPtr(vinfo.vorig_name,vinfo.vglob))])
-                                                  |_ -> Result.ok ([PStore(ok_exp,PLVar(vinfo.vorig_name,vinfo.vglob))])) *)
-                                                |Error e -> Error e)
-                            |CompoundInit _ -> let record = complex_type_to_pc_expr init in
-                                                 Result.ok ([PStore(record,PLVar(vinfo.vorig_name,vinfo.vglob))]))
-      |ConsInit (finfo, args, _) -> (match pc_of_exp_list args with
-                                      |Error e -> Error e
-                                      |Ok pc_args_list ->
-                                        Result.ok [PCall(finfo.vorig_name,pc_args_list);
-                                                  PRetAttr(PLVar(vinfo.vorig_name,vinfo.vglob))]
-                                        (* (match vinfo.vtype with
-                                          |TPtr _ -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
-                                                                PRetAttr(PLPtr(vinfo.vorig_name,vinfo.vglob))]
-                                          |_ -> Result.ok [PCall(finfo.vorig_name,pc_args_list);
-                                                           PRetAttr(PLVar(vinfo.vorig_name,vinfo.vglob))]) *)
-                                    ))
+      (*Init with a constant*)
+      | AssignInit init ->
+        init_to_pc_expr (Some init)
+        |> Result.map (fun pc_init ->
+          ([PStore (pc_init, PLVar (vinfo.vorig_name, vinfo.vglob))]))
+      (*Init with a call to a function*)
+      | ConsInit (finfo, args, _) ->
+        pc_of_exp_list args
+        |> Result.map (fun pc_args_list ->
+           [PCall (finfo.vorig_name, pc_args_list);
+           PRetAttr (PLVar (vinfo.vorig_name, vinfo.vglob))])
+    )
+
+  (*No instruction if we have a skip*)
   | Skip _ -> Result.ok ([])
   | i -> Result.error (Printf.sprintf "Instr not treated %s" (instr_to_str i))
-  (* | Asm of attributes * string list * extended_asm option * location
-  | Code_annot of code_annotation * location *)
 
+
+(**
+  Recursively generates PlusCal code from a given statement.
+  @param stmt statement to be converted to PlusCal code.
+  @return tuple containing:
+    - [Result] type with a list of PlusCal instructions or an error message.
+    - [Integer] representing the number of statements to skip after this one
+      This is used not to handle statement already handle, for ex. after a Block
+
+  The function does not handle the following cases :
+    - [Try]
+    - [Throw]
+    - [Continue]
+    - [Switch]
+**)
 let rec pc_of_stmt = function
+  (*Instruction*)
   | Instr i -> (pc_of_instr i, 0)
-  | Return (r,_) -> (match r with
-                                    |Some e -> let pc_exp = pc_of_exp e.enode in
-                                                (match pc_exp with
-                                                  |Ok ok_exp -> (Result.ok [PReturn(ok_exp)], 0)
-                                                  |Error e -> (Error e, 0))
-                                    |None -> (Result.ok [], 0))
-  | Goto (r,_) -> (Result.ok [PGoto(Pretty_utils.to_string Printer.pp_label (List.hd (!r).labels))], 0)
-  | If (e,b1,b2,_) -> (match pc_of_exp e.enode with
-                                                    |Error err -> (Error err, 0)
-                                                    |Ok ok_exp -> match pc_of_block b1.bstmts with
-                                                                   |Error err -> (Error err, 0)
-                                                                   |Ok ok_b1 -> match pc_of_block b2.bstmts with
-                                                                                |Error err -> (Error err, 0)
-                                                                                |Ok ok_b2 -> (Result.ok [PIf(ok_exp, ok_b1, ok_b2)],
-                                                                                             List.length b1.bstmts + List.length b2.bstmts))
+
+  (*Return of a function*)
+  | Return (r,_) ->
+    (match r with
+      | Some e -> (pc_of_exp e.enode) |> Result.map (fun ok_exp -> [PReturn ok_exp]), 0
+      | None -> Result.ok [], 0
+    )
+
+  (*Goto*)
+  | Goto (r,_) -> (Result.ok [PGoto (Pretty_utils.to_string Printer.pp_label (List.hd (!r).labels))], 0)
+
+  (*If statement*)
+  | If (e,b1,b2,_) ->
+    let pc_if =
+    Result.bind (pc_of_exp e.enode) (fun ok_exp ->
+      Result.bind (pc_of_block b1.bstmts) (fun ok_b1 ->
+        Result.bind (pc_of_block b2.bstmts) (fun ok_b2 ->
+          Result.ok [PIf (ok_exp, ok_b1, ok_b2)])))
+    in
+
+    if Result.is_error pc_if then pc_if, 0
+    else pc_if, List.length b1.bstmts + List.length b2.bstmts
+
+  (*Loop statement*)
+  (*All loops are transformated into while(1) loop*)
   | Loop (_,b,_,_,s) ->
-      (match s with |None -> Result.error "Break stmts in Loop should appear", 0
-      |Some(s) ->
-        Result.bind (pc_of_block b.bstmts) (fun pc_block ->
-          Result.ok ([PWhile(pc_block,Pretty_utils.to_string Printer.pp_label (List.hd s.labels))])), List.length b.bstmts+1)
-  | Break loc -> Result.ok ([PGoto(Pretty_utils.to_string Printer.pp_location loc)]), 0
+      (match s with
+        |None -> Result.error "Break stmts in Loop should appear", 0
+        |Some(s) ->
+          pc_of_block b.bstmts
+          |> Result.map (fun pc_block ->
+             [PWhile (pc_block, Pretty_utils.to_string Printer.pp_label (List.hd s.labels))]), List.length b.bstmts+1
+      )
+
+  (*Break statement*)
+  | Break loc -> Result.ok ([PGoto (Pretty_utils.to_string Printer.pp_location loc)]), 0
+
+  (*Block of instruction*)
   | Block b -> pc_of_block b.bstmts, List.length b.bstmts
+
+  (*Unspecified sequence*)
+  (*Handled as block*)
   | UnspecifiedSequence l ->
     let block = (Cil.block_from_unspecified_sequence l).bstmts in pc_of_block block, List.length block
 
   | s -> Result.error (Printf.sprintf "Stmt not treated %s" (stmt_to_str s)), 0
-  (* | TryFinally _ | TryExcept _ | TryCatch _ -> Format.fprintf out "try : "; Format.fprintf out "end try \n";
-  | Throw _ -> Format.fprintf out "throw : "; Format.fprintf out "end throw \n";
-  | Continue l -> Format.pp_print_string out "continue :"; Printer.pp_location out l; Format.fprintf out "end continue \n";
-  | Switch(e,b,stmt_list,loc) -> Format.fprintf out " switch : "; Printer.pp_exp out e; Printer.pp_block out b; List.iter (fun s -> Printer.pp_stmt out s) stmt_list; Printer.pp_location out loc; Format.fprintf out "end switch \n";*)
 
+
+(**
+  Converts a block of statements [b] into a list of PlusCal statements.
+  @param b block of statements to convert.
+  @return [Result] containing the list of PlusCal statements or an error.
+**)
 and pc_of_block b =
-  if List.length b = 0 then Result.ok ([PSkip])
+  (*Empty block*)
+  if List.length b = 0 then
+    Result.ok ([PSkip])
   else
+    (*Fold all stmt translation*)
     fold_left_result (fun s -> fst (pc_of_stmt s.skind)) (fun acc s_list -> acc@s_list) [] b
 
+
+(**
+  Converts an enum item [e] to a pair of its name and integer value.
+  @param e enum item to be converted.
+  @return [Result] enum item has pair (name (str), value (int)) or an error constant value.
+**)
 let pc_constant_of_enum (e: enumitem) = match e.eival.enode with
     | Const(CInt64(i,_,_)) -> Result.ok (e.einame, Integer.to_int_exn i)
-    | _ -> Result.error "Enum item should have cst value"
+    | _ -> Result.error "Enum item should have int constant value"
 
 
-let rec procedure_push_vars acc (vars: (pc_var * int option) list) (args_info: (bool * int list * int))  =
-  let (is_args, array_args_idx, nb_args) = args_info in
-  let (decl_list, nb_decl) = acc in
-  match vars with
-    |[] -> acc
-    |(vname, Some array_size)::q -> procedure_push_vars ((PDecl(PUndef, (vname,false))::(PInitArray(array_size,(vname,false))::decl_list)),nb_decl+1) q args_info
-    |(vname, None)::q -> if is_args
-                         then let idx = nb_args - ((List.length q)+1) in
-                              if List.mem idx array_args_idx
-                              then procedure_push_vars ((PDecl(PUndef, (vname,false))::(PCopy(PArg(vname),(vname, false))::decl_list)),nb_decl+1) q args_info
-                              else procedure_push_vars ((PDecl(PArg((vname)), (vname,false))::decl_list),nb_decl+1) q args_info
-                         else procedure_push_vars ((PDecl(PUndef, (vname,false))::decl_list),nb_decl+1) q args_info
+(**
+  Class responsible for generating PlusCal code from a given
+  Frama-C program. It inherits from [Visitor.frama_c_inplace], which allows it
+  to traverse and manipulate the Frama-C AST in place.
 
-let rec procedure_pop acc n =
-  match n with
-    |0 -> acc
-    |_ -> procedure_pop (PPop::acc) (n-1)
-
+  @param prog reference to a [pc_prog] object, which represents the PlusCal
+              program to be generated.
+  @val child_to_skip reference to an integer that keeps track of the number
+                     of child nodes to skip during traversal.
+  @val array_args_table reference to a hash table that stores information
+                        about array arguments, with an initial size of 100.
+**)
 class gen_pc (prog: pc_prog ref) = object
   inherit Visitor.frama_c_inplace
 
   val child_to_skip = ref 0;
   val array_args_table = ref (Hashtbl.create 100);
 
+  (*
+    Processes a file in the PlusCal plugin.
+    @param f file of the C code
+    @return action to take after processing the file
+
+    Updates the pc_prog by computing entry_point and name of the file
+    Adds one main process to the pc_prog and one process that initializes global variable
+  *)
   method! vfile f =
     let entry_point = get_entry_point f in
     let name = get_file_name() in
@@ -282,107 +437,178 @@ class gen_pc (prog: pc_prog ref) = object
     let processus = [{pc_process_name="proc";
                       pc_process_set="PROCESS";
                       pc_process_vars=[];
-                      pc_process_body=[PAwaitInit;PCall(entry_point,[])]}]
+                      pc_process_body=[PAwaitInit; PCall (entry_point,[])]}]
     in
+
+      (*Computes the args of function in the program which are array*)
+      (*Useful because those are transformed in pointer by Frama-C*)
       get_all_array_args !array_args_table f.globals;
+
       prog := {!prog with
                pc_prog_name = name;
                pc_entry_point = entry_point;
                pc_nb_process = nb_process;
                pc_processus = processus};
+
       Cil.DoChildrenPost(fun f ->
+        (*Add the process that initializes global variable*)
         let glob_init_process =
           {pc_process_name="globalInit";
           pc_process_set="GLOBAL_INIT";
           pc_process_vars=[];
-          pc_process_body=(List.fold_left (fun acc ((name, int_opt),expr) ->
+
+          pc_process_body=(List.fold_left
+          (* A variable is represented here as a tuple (str, int option).
+             The second parameter indicates if the variable is an array, providing its size if it is. *)
+          (fun acc ((name, int_opt),expr) ->
+            (*If the variable is an array, call to init_array procedure*)
             match int_opt with
-              |Some array_size -> (PDecl(PUndef, (name,true))::(PInitArray(array_size,(name,true))::acc))
-              |None -> (PDecl(expr, (name,true))::acc)) [] (!prog).pc_glob_var)@[PInitDone]}
+              |Some array_size -> PDecl (PUndef, (name,true))::(PInitArray (array_size, (name,true))::acc)
+              |None -> PDecl (expr, (name,true))::acc) [] (!prog).pc_glob_var)@[PInitDone]
+          }
         in
         prog := {!prog with
                   pc_processus = glob_init_process::(!prog).pc_processus};f)
 
+
+  (*
+    Processes global declarations in the CIL AST and updates the program state accordingly.
+    @param g global declaration to process.
+    @return action to take after processing the global declaration.
+
+    The method does not handle the following cases :
+      - [GAsm] : global assembly code
+      - [GPragma] : pragmas at top level
+      - [GText] : text at top level
+      - [GAnnot] : global annotation
+      - [GType] : typedef
+      - [GDecl] : declaration (variable, function, etc.)
+  *)
   method! vglob_aux g =
     match g with
-      | GVar(varinfo, initinfo, _) -> prog := {!prog with
-                                          pc_glob_var = (varinfo_to_pc_decl varinfo,init_to_pc_expr initinfo.init)
-                                                        ::(!prog).pc_glob_var;};
-                                      Cil.DoChildren
-      | GCompTag(_, _) -> Cil.DoChildren
-      | GEnumTag (enuminfo,_) -> (match fold_left_result (fun e -> pc_constant_of_enum e) (fun acc e -> acc@[e]) [] enuminfo.eitems with
-                                  |Error e -> Printf.eprintf "Error : %s" e; Cil.DoChildren
-                                  |Ok enum_items ->
-                                    prog := {!prog with
-                                      pc_constants = (!prog).pc_constants@enum_items};
-                                    Cil.DoChildren)
-      | GFun(fundec, _) ->  Cfg.prepareCFG fundec;
-                            let proc_name = fundec.svar.vorig_name in
-                            let args = List.map (varinfo_to_pc_decl) fundec.sformals in
-                            let vars = List.map (varinfo_to_pc_decl) fundec.slocals in
-                            let (args_decl,nb_args_decl) = procedure_push_vars ([],0) args (true,(Hashtbl.find_all !array_args_table proc_name),(List.length args)) in
-                            let (vars_decl,nb_vars_decl) = procedure_push_vars ([],0) vars (false,[],0) in
-                            let pop_list = procedure_pop [] (nb_args_decl + nb_vars_decl) in
-                              prog := {!prog with
-                                      pc_procedures = {pc_procedure_name=proc_name;
-                                                       pc_procedure_args=List.map (varinfo_to_pcvar) fundec.sformals;
-                                                       pc_procedure_vars=List.map (varinfo_to_pcvar) fundec.slocals;
-                                                       pc_procedure_body=args_decl@vars_decl}
-                                                      ::(!prog).pc_procedures;};
-                             Cil.DoChildrenPost(fun g ->
-                              match (!prog).pc_procedures with
-                              |curr_proc::q ->
-                                let block = if (List.mem (curr_proc.pc_procedure_name) (Options.CheckFun.get()))
-                                  then [PLabel("Check_"^curr_proc.pc_procedure_name^":");PSkip] else []
-                                in
-                                prog :={!prog with
-                                  pc_procedures = {curr_proc with
-                                                  pc_procedure_body=
-                                                  curr_proc.pc_procedure_body@
-                                                  block@
-                                                  pop_list}
-                                                ::q;}; g
-                              |[] -> Printf.eprintf "Error no procedure"; g)
-      | _ -> Cil.DoChildren
-      (* | GAsm _ -> Format.fprintf out "GAsm : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GAsm \n"; g)
-      | GPragma _ -> Format.fprintf out "GPragma : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GPragma \n"; g)
-      | GText _ -> Format.fprintf out "GText : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GText \n"; g)
-      | GAnnot _ -> Format.fprintf out "GAnnot : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GAnnot \n"; g)
-      | GType(typeinfo, loc) -> Format.fprintf out "GType : "; Format.pp_print_string out typeinfo.torig_name; Format.pp_print_string out typeinfo.tname ; Printer.pp_typ out typeinfo.ttype; Format.pp_print_bool out typeinfo.treferenced; Printer.pp_location out loc;
-        Cil.DoChildrenPost (fun g -> Format.fprintf out "End GType \n"; g)
-      | GCompTagDecl(compinfo, loc) -> Format.fprintf out "GCompTagDecl : "; Printer.pp_compinfo out compinfo; Printer.pp_location out loc; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GCompTagDecl \n"; g)
-      | GEnumTagDecl _ -> Format.fprintf out "GEnumTagDecl : "; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GEnumTagDecl \n"; g)
-      | GVarDecl(varinfo, loc) -> Format.fprintf out "GVarDecl : "; Printer.pp_varinfo out varinfo; Printer.pp_location out loc; Cil.DoChildrenPost (fun g -> Format.fprintf out "End GVarDecl \n"; g)
-      | GFunDecl(funspec, varinfo, loc) -> Format.fprintf out "GFunDecl : "; Printer.pp_funspec out funspec ; Printer.pp_varinfo out varinfo; Printer.pp_location out loc;
-                      Cil.DoChildrenPost (fun g -> Format.fprintf out "End GFunDecl \n"; g) *)
+      (*Global variable*)
+      | GVar(varinfo, initinfo, _) ->
+          prog := {!prog with
+                    pc_glob_var =
+                      (*Process variable and init before adding to pc_prog*)
+                      (varinfo_to_pc_decl varinfo, Result.get_ok (init_to_pc_expr initinfo.init))
+                      ::(!prog).pc_glob_var;
+                  };
+          Cil.DoChildren
 
+      (*Struct/Union tag*)
+      (*Will be handle in complex_type_to_pc_expr later*)
+      | GCompTag(_, _) -> Cil.DoChildren
+
+      (*Enum tag*)
+      | GEnumTag (enuminfo,_) ->
+        (*Folds enum item as a list of (name (str), value (int))*)
+        (match fold_left_result (fun e -> pc_constant_of_enum e) (fun acc e -> acc@[e]) [] enuminfo.eitems with
+          |Error e -> Printf.eprintf "Error : %s" e; Cil.DoChildren
+          |Ok enum_items ->
+            prog := {!prog with
+                     (*Add the items as TLA constants*)
+                     pc_constants = (!prog).pc_constants@enum_items
+                    };
+            Cil.DoChildren
+        )
+
+      (*Function*)
+      | GFun(fundec, _) ->
+          Cfg.prepareCFG fundec;
+          let proc_name = fundec.svar.vorig_name in
+
+          (*Process args and local vars of the function*)
+          let args = List.map (varinfo_to_pc_decl) fundec.sformals in
+          let vars = List.map (varinfo_to_pc_decl) fundec.slocals in
+
+          (*Declaration instructions of args and local vars of the function*)
+          let (args_decl,nb_args_decl) = procedure_push_vars ([],0) args
+              (true,(Hashtbl.find_all !array_args_table proc_name),(List.length args))
+          in
+          let (vars_decl,nb_vars_decl) = procedure_push_vars ([],0) vars (false,[],0) in
+
+          (*Pop instructions to put at the end of the function*)
+          let pop_list = procedure_pop [] (nb_args_decl + nb_vars_decl) in
+
+            prog := {!prog with
+                    pc_procedures =
+                      {pc_procedure_name=proc_name;
+                       pc_procedure_args=List.map (varinfo_to_pcvar) fundec.sformals;
+                       pc_procedure_vars=List.map (varinfo_to_pcvar) fundec.slocals;
+                       pc_procedure_body=args_decl@vars_decl
+                      }::(!prog).pc_procedures;
+                    };
+
+            Cil.DoChildrenPost(fun g ->
+            match (!prog).pc_procedures with
+            |curr_proc::q ->
+              (*Add a label to check invariant in the procedure*)
+              (*Only if the option is given in frama-c params*)
+              let check_label = if (List.mem (curr_proc.pc_procedure_name) (Options.CheckFun.get()))
+                then [PLabel ("Check_"^curr_proc.pc_procedure_name^":"); PSkip] else []
+              in
+              prog := {!prog with
+                        pc_procedures =
+                         {curr_proc with
+                            pc_procedure_body=
+                            curr_proc.pc_procedure_body@
+                            check_label@ (*Check Label*)
+                            pop_list (*Pop instructions*)
+                          }::q;
+                      }; g
+            |[] -> Printf.eprintf "Error no procedure"; g)
+
+      | _ -> Cil.DoChildren
+
+
+  (*
+    Processes statements in the CIL AST and updates the program state accordingly.
+    @param s statement to process.
+    @return action to take after processing the statement.
+
+
+  *)
   method! vstmt_aux s =
+    (*Checks if there are statements to skip and skips them if so*)
     match !child_to_skip with |i when i > 0 ->
-      child_to_skip := !child_to_skip - 1;
-      Cil.SkipChildren
+    child_to_skip := !child_to_skip - 1;
+    Cil.SkipChildren
+
     |_ ->
     let (pc_instrs_result,nb_skip) = pc_of_stmt s.skind in
     child_to_skip := nb_skip;
+
     match pc_instrs_result with
-      |Error e -> Printf.eprintf "Error : %s" e; Cil.DoChildren
-      |Ok pc_instrs -> match (!prog).pc_procedures with
-                        |curr_proc::q -> (match s.labels with
-                                            |[] -> prog :=
-                                                    {!prog with
-                                                    pc_procedures = {curr_proc with
-                                                                      pc_procedure_body=
-                                                                      curr_proc.pc_procedure_body@
-                                                                      pc_instrs}
-                                                                    ::q;};
-                                            Cil.DoChildren
-                                            |lbl::_ -> prog :=
-                                                      {!prog with
-                                                      pc_procedures = {curr_proc with
-                                                                        pc_procedure_body=
-                                                                        curr_proc.pc_procedure_body@
-                                                                        (PLabel(Pretty_utils.to_string Printer.pp_label lbl)
-                                                                        ::pc_instrs)}
-                                                                      ::q;};
-                                            Cil.DoChildren)
-                        |[] -> Printf.eprintf "Error no procedure"; Cil.DoChildren
+      (*There was an error in the statement process*)
+      | Error e -> Printf.eprintf "Error : %s" e; Cil.DoChildren
+
+      | Ok pc_instrs ->
+        match (!prog).pc_procedures with
+          |curr_proc::q ->
+            (match s.labels with
+              |[] -> prog :=
+                      {!prog with
+                      pc_procedures =
+                        {curr_proc with
+                          pc_procedure_body=
+                          curr_proc.pc_procedure_body@
+                          pc_instrs}::q;
+                      };
+              Cil.DoChildren
+
+              (*The statement has label*)
+              |lbl::_ -> prog :=
+                        {!prog with
+                        pc_procedures =
+                          {curr_proc with
+                            pc_procedure_body=
+                            curr_proc.pc_procedure_body@
+                            (*Add the label to the instruction body*)
+                            (PLabel (Pretty_utils.to_string Printer.pp_label lbl)
+                            ::pc_instrs)}::q;
+                        };
+              Cil.DoChildren
+            )
+          |[] -> Printf.eprintf "Error no procedure"; Cil.DoChildren
 end

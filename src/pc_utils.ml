@@ -1,6 +1,46 @@
 open Cil_types
 open Pc
 
+(**
+  Converts an expression to its string representation.
+  @param exp The expression to convert.
+  @return A string representing the expression.
+**)
+let exp_to_str = function
+  | SizeOfE _ -> "SizeOfE"
+  | SizeOfStr _ -> "SizeOfStr"
+  | AlignOf _ -> "AlignOf"
+  | AlignOfE _ -> "AlignOfE"
+  | CastE _ -> "CastE"
+  | StartOf _ -> "StartOf"
+  |_ -> ""
+
+(**
+  Converts an instruction to its string representation.
+  @param instr The instruction to convert.
+  @return A string representing the instruction.
+**)
+let instr_to_str = function
+  | Asm _ -> "Asm"
+  | Skip _ -> "Skip"
+  | Code_annot _ -> "Code Annot"
+  |_ -> ""
+
+(**
+  Converts a statement to its string representation.
+  @param stmt The statement to convert.
+  @return A string representing the statement.
+**)
+let stmt_to_str = function
+  | TryFinally _ | TryExcept _ | TryCatch _ -> "Try"
+  | Throw _ -> "Throw"
+  | Break _ -> "Break"
+  | Continue _ -> "Continue"
+  | Switch _ -> "Switch"
+  | Loop _ -> "Loop"
+  | UnspecifiedSequence _ -> "UnspecifiedSequence"
+  | _ -> ""
+
 let get_file_name() =
     let full_name =  Filepath.Normalized.to_pretty_string (List.hd (Kernel.Files.get())) in
     let base_name = Filename.basename full_name in
@@ -66,6 +106,24 @@ let get_entry_point (f: file) =
                 |GFun(fundec,_) -> Some fundec.svar.vorig_name
                 |_ -> None)
         f.globals))
+
+let rec procedure_push_vars acc (vars: (pc_var * int option) list) (args_info: (bool * int list * int))  =
+    let (is_args, array_args_idx, nb_args) = args_info in
+    let (decl_list, nb_decl) = acc in
+    match vars with
+        |[] -> acc
+        |(vname, Some array_size)::q -> procedure_push_vars ((PDecl(PUndef, (vname,false))::(PInitArray(array_size,(vname,false))::decl_list)),nb_decl+1) q args_info
+        |(vname, None)::q -> if is_args
+                            then let idx = nb_args - ((List.length q)+1) in
+                                if List.mem idx array_args_idx
+                                then procedure_push_vars ((PDecl(PUndef, (vname,false))::(PCopy(PArg(vname),(vname, false))::decl_list)),nb_decl+1) q args_info
+                                else procedure_push_vars ((PDecl(PArg((vname)), (vname,false))::decl_list),nb_decl+1) q args_info
+                            else procedure_push_vars ((PDecl(PUndef, (vname,false))::decl_list),nb_decl+1) q args_info
+
+let rec procedure_pop acc n =
+    match n with
+        |0 -> acc
+        |_ -> procedure_pop (PPop::acc) (n-1)
 
 (*Detects all the StartOf op (i.e. array conversion to ptr) in functions calls in a stmts list
   and add the array args index in a hashtable with the function name as key
