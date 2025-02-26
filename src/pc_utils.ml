@@ -12,8 +12,8 @@ open Pc
 
 (**
   Converts an expression to its string representation.
-  - @param exp The expression to convert.
-  - @return A string representing the expression.
+  @param exp The expression to convert.
+  @return A string representing the expression.
 **)
 let exp_to_str = function
   | SizeOfE _ -> "SizeOfE"
@@ -26,8 +26,8 @@ let exp_to_str = function
 
 (**
   Converts an instruction to its string representation.
-  - @param instr The instruction to convert.
-  - @return A string representing the instruction.
+  @param instr The instruction to convert.
+  @return A string representing the instruction.
 **)
 let instr_to_str = function
   | Asm _ -> "Asm"
@@ -37,8 +37,8 @@ let instr_to_str = function
 
 (**
   Converts a statement to its string representation.
-  - @param stmt The statement to convert.
-  - @return A string representing the statement.
+  @param stmt The statement to convert.
+  @return A string representing the statement.
 **)
 let stmt_to_str = function
   | TryFinally _ | TryExcept _ | TryCatch _ -> "Try"
@@ -58,7 +58,7 @@ let stmt_to_str = function
 
 (**
     Retrieves the base name of the first file in the list of files managed by the Kernel.
-    - @return A string representing the base name of the first file.
+    @return A string representing the base name of the first file.
 **)
 let get_file_name() =
     let full_name =  Filepath.Normalized.to_pretty_string (List.hd (Kernel.Files.get())) in
@@ -90,8 +90,8 @@ let get_entry_point (f: file) =
 
 (**
     Checks if a given binary operation is a pointer operation.
-    - @param b binary operation to check.
-    - @return [Boolean] telling if the operation is on pointer or not.
+    @param b binary operation to check.
+    @return [Boolean] telling if the operation is on pointer or not.
 **)
 let is_binop_ptr (b: pc_binop) = match b with
     | PAddPI | PSubPI | PSubPP -> true
@@ -100,9 +100,9 @@ let is_binop_ptr (b: pc_binop) = match b with
 (**
     Adds the integer [n] to the integer constant in an pc_expr [e].
 
-    - @param e [pc_expr] to which the integer [n] will be added.
-    - @param n integer to add to the constant within [e].
-    - @return [pc_expr] with the integer [n] added to the constant, or the
+    @param e [pc_expr] to which the integer [n] will be added.
+    @param n integer to add to the constant within [e].
+    @return [pc_expr] with the integer [n] added to the constant, or the
               original [e] if it is not a [PCst (PInt (i))].
 **)
 let add_pc_cst (e: pc_expr) (n: int) =
@@ -118,9 +118,9 @@ let add_pc_cst (e: pc_expr) (n: int) =
 
 (**
     Computes the variable name in the PlusCal representation.
-    - @param proc_name name of the procedure.
-    - @param vname name of the variable.
-    - @return [String] that combines the variable name, "_ptr_", and the procedure name.
+    @param proc_name name of the procedure.
+    @param vname name of the variable.
+    @return [String] that combines the variable name, "_ptr_", and the procedure name.
 
     Useful to dump procedure variables section.
 **)
@@ -130,9 +130,9 @@ let vname_to_string (proc_name: string) (vname: string) =
 
 (**
     Computes the argument name in the PlusCal representation.
-    - @param proc_name name of the procedure.
-    - @param vname name of the argument.
-    - @return [String] that combines [vname], an underscore, and [proc_name].
+    @param proc_name name of the procedure.
+    @param vname name of the argument.
+    @return [String] that combines [vname], an underscore, and [proc_name].
 
     Useful to dump procedure arguments.
 **)
@@ -142,10 +142,10 @@ let arg_to_string (proc_name: string) (vname: pc_var) =
 
 (**
     Converts a pointer PlusCal representation to a string.
-    - @param proc_name name of the procedure.
-    - @param (ptr_name, glob) tuple where [ptr_name] is the name of the pointer
+    @param proc_name name of the procedure.
+    @param (ptr_name, glob) tuple where [ptr_name] is the name of the pointer
                               and [glob] is a boolean indicating if the pointer is global.
-    - @return [String] representation of the pointer in the format "ptr_name_ptr_suffix",
+    @return [String] representation of the pointer in the format "ptr_name_ptr_suffix",
                        where suffix is either "glob" if the pointer is global, or the procedure name if it is not.
 
     Useful to dump pointer in the program core.
@@ -157,10 +157,10 @@ let ptr_to_string (proc_name: string) ((ptr_name,glob): pc_ptr) =
 
 (**
     Recursively prints the elements of a list [l] to the formatter [out] using the function [dump_fun].
-    - @param out formatter to output the list elements.
-    - @param l list of elements to be printed.
-    - @param dump_fun function used to print each element of the list.
-    - @return unit.
+    @param out formatter to output the list elements.
+    @param l list of elements to be printed.
+    @param dump_fun function used to print each element of the list.
+    @return unit.
 
     Each element is separated by a comma, except for the last element.
 **)
@@ -172,8 +172,8 @@ let rec dump_list out l dump_fun =
 
 (**
     Computes a string consisting of [n * 4] spaces.
-    - @param n number of indentation levels.
-    - @return [String] with [n * 4] spaces.
+    @param n number of indentation levels.
+    @return [String] with [n * 4] spaces.
 
     Useful for creating indentation in formatted output.
 **)
@@ -181,16 +181,16 @@ let string_of_indent n = (String.make (n * 4) ' ')
 
 (**
     Computes a new string with [n * 4] spaces concatened to the given [indent] string.
-    - @param n number of indentation levels.
-    - @param indent The string to which the indentation will be added.
-    - @return [String] with the wanted indentation.
+    @param n number of indentation levels.
+    @param indent The string to which the indentation will be added.
+    @return [String] with the wanted indentation.
 **)
 let add_indent n indent = String.concat "" [(string_of_indent n); indent]
 
 (**
     Removes the last character from the string [s].
-    - @param s input string from which the last character will be removed.
-    - @return [String] with the last character removed, or the original string if it is empty.
+    @param s input string from which the last character will be removed.
+    @return [String] with the last character removed, or the original string if it is empty.
 
     Useful to remove ":" from labels.
 **)
@@ -206,11 +206,11 @@ let remove_last_char s =
 
 (**
     Recursively processes a list of variables and generates a list of declarations and initializations.
-    - @param acc tuple containing the current list of declarations and the number of declarations.
-    - @param vars list of tuples where each tuple contains a variable name and an optional array size.
-    - @param args_info tuple containing a boolean indicating if the variables are arguments,
+    @param acc tuple containing the current list of declarations and the number of declarations.
+    @param vars list of tuples where each tuple contains a variable name and an optional array size.
+    @param args_info tuple containing a boolean indicating if the variables are arguments,
                        a list of indices for array arguments, and the number of arguments.
-    - @return [Pc_instr list, Integer] tuple containing the updated list of declarations and the number of declarations.
+    @return [Pc_instr list, Integer] tuple containing the updated list of declarations and the number of declarations.
 
     The number of declarations is useful to return to generate the right number of pop instructions later.
 
@@ -236,19 +236,23 @@ let rec procedure_push_vars acc (vars: (pc_var * int option) list) (args_info: (
                 if List.mem idx array_args_idx
                 (*If the current index of the argument is the index of an array*)
                 (*Add a copy instruction, to pass the array as a pointer*)
-                then procedure_push_vars ((PDecl (PUndef, (vname, false))::(PCopy (PArg (vname), (vname, false))::decl_list)), nb_decl+1) q args_info
+                then procedure_push_vars
+                     ((PDecl (PUndef, (vname, false))::(PCopy (PArg (vname), (vname, false))::decl_list)), nb_decl+1)
+                     q args_info
 
                 (*Simple argument declaration with its value*)
-                else procedure_push_vars ((PDecl (PArg((vname)), (vname, false))::decl_list), nb_decl+1) q args_info
+                else procedure_push_vars
+                     ((PDecl (PArg((vname)), (vname, false))::decl_list), nb_decl+1)
+                     q args_info
 
             (*Not an argument, just declare with undef value*)
             else procedure_push_vars ((PDecl (PUndef, (vname, false))::decl_list), nb_decl+1) q args_info
 
 (**
     Recursively generates a list of pop operations.
-    - @param acc current list of operations.
-    - @param n number of pop operations to generate.
-    - @return[Pc_instr list] of operations with the specified number of pop operations added.
+    @param acc current list of operations.
+    @param n number of pop operations to generate.
+    @return[Pc_instr list] of operations with the specified number of pop operations added.
 **)
 let rec procedure_pop acc n =
     match n with
@@ -263,8 +267,8 @@ let rec procedure_pop acc n =
 
 (**
     Converts a variable information into a representation, with information if it is an array or not.
-    - @param v variable information record of type [varinfo].
-    - @return [String, Int option] tuple containing the original name of the variable and an optional
+    @param v variable information record of type [varinfo].
+    @return [String, Int option] tuple containing the original name of the variable and an optional
             length of the array if the variable is of array type.
 
     Useful to generate init_array operations.
@@ -278,9 +282,9 @@ let varinfo_is_array (v: varinfo) =
     Detects all the StartOf operations (i.e., array conversion to pointer) in function calls within a list of statements
     and adds the array argument indices to a hashtable with the function name as the key.
 
-    - @param array_args_table hashtable with the function name as the key and a list of argument indices as the value.
-    - @param stmts list of statements to analyze.
-    - @return unit.
+    @param array_args_table hashtable with the function name as the key and a list of argument indices as the value.
+    @param stmts list of statements to analyze.
+    @return unit.
 
     The hashtable will be modified in place and do not need to be returned.
 **)
@@ -299,9 +303,9 @@ let detect_array_args (array_args_table: (string, int) Hashtbl.t)  (stmts: stmt 
 
 (**
     Iterates over all global definitions to find functions and detect array arguments in their statements.
-    - @param array_args_table hashtable with the function name as the key and a list of argument indices as the value.
-    - @param globals list of global definitions to analyze.
-    - @return unit.
+    @param array_args_table hashtable with the function name as the key and a list of argument indices as the value.
+    @param globals list of global definitions to analyze.
+    @return unit.
 
     The hashtable will be modified in place and do not need to be returned.
 **)
@@ -322,11 +326,11 @@ let get_all_array_args (array_args_table: (string, int) Hashtbl.t) (globals: glo
     If any application of [f] returns an error, the folding process stops and
     returns the error. Otherwise, it combines the results using the function [g].
 
-    - @param f function that takes an element of the list and returns a result.
-    - @param g function that combines the accumulator and the result of [f].
-    - @param init_acc initial value of the accumulator.
-    - @param l list to fold over.
-    - @return [Result] containing the final accumulated value or an error.
+    @param f function that takes an element of the list and returns a result.
+    @param g function that combines the accumulator and the result of [f].
+    @param init_acc initial value of the accumulator.
+    @param l list to fold over.
+    @return [Result] containing the final accumulated value or an error.
 **)
 let fold_left_result f g init_acc l =
     List.fold_left (fun acc i ->

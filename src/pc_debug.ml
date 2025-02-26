@@ -53,9 +53,9 @@ let rec print_pc_cst out (c: pc_cst) = match c with
 
 and print_pc_lval out (lval: pc_lval) = match lval with
   | PLVar(ptr,_) -> Format.fprintf out "%s" ptr;
-  | PLoad(lval_prime) -> Format.fprintf out "load(";print_pc_lval out lval_prime;Format.fprintf out ")";
-  | PField(field,lval_prime) -> print_pc_lval out lval_prime; Format.fprintf out ".%s" field;
-  | PIndex(idx,lval_prime) -> print_pc_lval out lval_prime; Format.fprintf out "["; print_pc_expr out idx; Format.fprintf out "]"
+  | PLoad(lval') -> Format.fprintf out "load(";print_pc_lval out lval';Format.fprintf out ")";
+  | PField(field,lval') -> print_pc_lval out lval'; Format.fprintf out ".%s" field;
+  | PIndex(idx,lval') -> print_pc_lval out lval'; Format.fprintf out "["; print_pc_expr out idx; Format.fprintf out "]"
 
 and print_pc_expr out (exp: pc_expr) = match exp with
   | PCst(cst) -> Format.fprintf out "PCst(";print_pc_cst out cst;Format.fprintf out ")";

@@ -7,19 +7,19 @@ open Pc_utils
 
 (**
   Type representing information to be dumped.
-  - @param label string representing the label.
-  - @param proc_name string representing the procedure name.
-  - @param line integer representing the line number.
-  - @param indent_space string representing the indentation space.
+  @param label string representing the label.
+  @param proc_name string representing the procedure name.
+  @param line integer representing the line number.
+  @param indent_space string representing the indentation space.
 **)
 type dump_info = string * string * int * string
 
 
 (**
   Outputs the variable declaration for a given procedure variable.
-  - @param out formatter to output the variable declaration
-  - @param proc_name name of the procedure
-  - @param v_name procedure variable to be declared
+  @param out formatter to output the variable declaration
+  @param proc_name name of the procedure
+  @param v_name procedure variable to be declared
 **)
 let dump_proc_var out (proc_name: string) ((v_name): pc_var) =
   Format.fprintf out "    %s = [loc |-> \"stack\", fp |-> Len(my_stack), offs |-> 0];\n" (vname_to_string proc_name v_name)
@@ -27,18 +27,18 @@ let dump_proc_var out (proc_name: string) ((v_name): pc_var) =
 
 (**
   Outputs the string representation of a PlusCal argument of a procedure.
-  - @param proc_name name of the procedure to which the variable belongs.
-  - @param out formatter to which the variable's string representation is printed.
-  - @param v PlusCal arg to be printed.
+  @param proc_name name of the procedure to which the variable belongs.
+  @param out formatter to which the variable's string representation is printed.
+  @param v PlusCal arg to be printed.
 **)
 let dump_arg (proc_name: string) out (v: pc_var) =  Format.fprintf out "%s" (arg_to_string proc_name v)
 
 
 (**
-  Prints the string representation of the given
+  Outputs the string representation of the given
   PlusCal binary operator [b] to the formatter [out].
-  - @param out formatter to which the binary operator will be printed.
-  - @param b PlusCal binary operator to be printed. It can be one of the following:
+  @param out formatter to which the binary operator will be printed.
+  @param b PlusCal binary operator to be printed. It can be one of the following:
 
   This function does not handle the pointer operations.
 **)
@@ -63,89 +63,181 @@ let dump_pc_binop out (b: pc_binop) = match b with
   | PBxor -> Format.fprintf out "^^";
   |_ -> Format.fprintf out "Error dump_pc_binop: non-ptr operation expected"
 
+
+(**
+  Outputs the PlusCal representation of a unary operator [u] to the formatter [out].
+  @param out formatter to print to.
+  @param u unary operator to be printed. It can be one of the following:
+**)
 let dump_pc_unop out (u: pc_unop) = match u with
-  |PMinus -> Format.fprintf out "-";
-  |PNot -> Format.fprintf out "~"
-  |PBnot -> Format.fprintf out "Not"
+  | PMinus -> Format.fprintf out "-";
+  | PNot -> Format.fprintf out "~"
+  | PBnot -> Format.fprintf out "Not"
 
-let rec dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
-  |PInt(i) -> Format.fprintf out "%s" (string_of_int i);
-  |PString(s) -> Format.fprintf out "\"%s\"" s;
-  |PRecord l -> Format.fprintf out "[";
-                dump_list out l (fun out (field_name, exp) ->
-                  Format.fprintf out "%s |-> " field_name;
-                  dump_pc_expr proc_name out exp;);
-                Format.fprintf out "]"
-  |PArray l -> Format.fprintf out "<<";
-    dump_list out l (fun out exp -> dump_pc_expr proc_name out exp;);
-    Format.fprintf out ">>"
-  |PEnumItem item_name -> Format.fprintf out "%s" item_name
 
+(**
+  Outputs the representation of a pointer binary operation to the given formatter.
+  @param out formatter to output the representation.
+  @param proc_name name of the procedure containing the expressions.
+  @param b binary operation to be represented.
+  @param e1 first expression (expected to be a pointer lvalue).
+  @param e2 second expression.
+**)
+let rec dump_pc_binop_ptr out (proc_name: string) (b: pc_binop) (e1: pc_expr) (e2: pc_expr) =
+  (match e1 with
+    | PLval lval ->
+      let ptr_string = string_of_pc_lval proc_name lval in
+        (match b with
+          (* Our stack grows backward, we should invert arithmetic operations *)
+          | PAddPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs-"
+                      ptr_string ptr_string ptr_string;
+                      dump_pc_expr proc_name out e2;
+                      Format.fprintf out "]";
+
+          | PSubPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+"
+                      ptr_string ptr_string ptr_string;
+                      dump_pc_expr proc_name out e2;
+                      Format.fprintf out "]";
+
+          | PSubPP -> (match e2 with
+                        | PLval lval2 ->
+                          let ptr2_string = string_of_pc_lval proc_name lval2 in
+                          Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+%s.offs]"
+                          ptr_string ptr_string ptr_string ptr2_string;
+                        | _ -> Format.fprintf out "Error: dump_pc_binop_ptr: second lval operand expected")
+
+          | _ -> Format.fprintf out "Error: dump_pc_binop_ptr: binop should be ptr operator")
+    | _ -> Format.fprintf out "Error: dump_pc_binop_ptr: first lval operand expected")
+
+
+(**
+  Outputs the PlusCal representation of a constant [c] to the formatter [out].
+  @param proc_name name of the procedure.
+  @param out output formatter.
+  @param c PlusCal constant to be dumped.
+**)
+and dump_pc_cst (proc_name: string) out (c: pc_cst) = match c with
+  | PInt i -> Format.fprintf out "%s" (string_of_int i);
+  | PString s -> Format.fprintf out "\"%s\"" s;
+
+  | PRecord l ->
+      Format.fprintf out "[";
+      dump_list out l
+          (fun out (field_name, exp) ->
+          Format.fprintf out "%s |-> " field_name;
+          dump_pc_expr proc_name out exp;);
+      Format.fprintf out "]"
+
+  | PArray l ->
+      Format.fprintf out "<<";
+      dump_list out l (fun out exp -> dump_pc_expr proc_name out exp;);
+      Format.fprintf out ">>"
+
+  | PEnumItem item_name -> Format.fprintf out "%s" item_name
+
+
+(**
+  Outputs the PlusCal representation of an expression [e] to the formatter [out].
+  @param proc_name name of the procedure in which the expression is located.
+  @param out formatter where the output string representation of the expression is written.
+  @param exp PlusCal expression to be formatted.
+**)
 and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
-  | PCst(cst) -> dump_pc_cst proc_name out cst
-  | PBinop(binop, e1, e2) -> (match is_binop_ptr binop with
-                              | true ->
-                                  Format.fprintf out "(";
-                                  dump_pc_binop_ptr out proc_name binop e1 e2;
-                                  Format.fprintf out ")"
-                              | false ->
-                                  Format.fprintf out "(";
-                                  dump_pc_expr proc_name out e1;
-                                  dump_pc_binop out binop;
-                                  dump_pc_expr proc_name out e2;
-                                  Format.fprintf out ")")
-  | PUnop(unop, exp) ->
+  | PCst cst -> dump_pc_cst proc_name out cst
+
+  | PBinop (binop, e1, e2) ->
+      if is_binop_ptr binop then
+        (Format.fprintf out "(";
+        dump_pc_binop_ptr out proc_name binop e1 e2;
+        Format.fprintf out ")")
+      else
+        Format.fprintf out "(";
+        dump_pc_expr proc_name out e1;
+        dump_pc_binop out binop;
+        dump_pc_expr proc_name out e2;
+        Format.fprintf out ")"
+
+  | PUnop (unop, exp) ->
       Format.fprintf out "(";
       dump_pc_unop out unop;
       Format.fprintf out "(";
       dump_pc_expr proc_name out exp;
       Format.fprintf out "))"
+
+  (*Lvalue as an expression
+    We need to load the value from PlusCal pointer
+    representation of variables, before calling dump_pc_lval*)
+  | PLval lval ->
+    (match lval with
+      | PLVar ptr -> Format.fprintf out "load(my_stack, %s)" (ptr_to_string proc_name ptr)
+      | PLoad lval' ->
+          Format.fprintf out "load(my_stack, load(my_stack, ";
+          dump_pc_lval out proc_name lval';
+          Format.fprintf out "))"
+      | PField (field, lval') ->
+          Format.fprintf out "load(my_stack, ";
+          dump_pc_lval out proc_name lval';
+          Format.fprintf out ").%s" field
+      | PIndex (idx, lval') ->
+          Format.fprintf out "load(my_stack, ";
+          dump_pc_lval out proc_name lval';
+          Format.fprintf out ")[";
+          dump_pc_expr proc_name out idx;
+          Format.fprintf out "]")
+
+  | PArg v -> dump_arg proc_name out v
+
   | PUndef -> Format.fprintf out "UNDEF"
-  | PLval(lval) -> (match lval with
-                    | PLVar(ptr) -> Format.fprintf out "load(my_stack, %s)" (ptr_to_string proc_name ptr)
-                    | PLoad(lval_prime) ->
-                        Format.fprintf out "load(my_stack, load(my_stack, ";
-                        dump_pc_lval out proc_name lval_prime;
-                        Format.fprintf out "))"
-                    | PField(field, lval_prime) ->
-                        Format.fprintf out "load(my_stack, ";
-                        dump_pc_lval out proc_name lval_prime;
-                        Format.fprintf out ").%s" field
-                    | PIndex(idx, lval_prime) ->
-                        Format.fprintf out "load(my_stack, ";
-                        dump_pc_lval out proc_name lval_prime;
-                        Format.fprintf out ")[";
-                        dump_pc_expr proc_name out idx;
-                        Format.fprintf out "]")
-  | PArg(v) -> dump_arg proc_name out v
-  | PAddr(lval) -> (match lval with
-                    | PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
-                    | PLoad(lval_prime) ->
-                        Format.fprintf out "load(my_stack, ";
-                        dump_pc_lval out proc_name lval_prime;
-                        Format.fprintf out ")"
-                    | _ -> Format.fprintf out "Error: lval not treated")
 
-and dump_pc_addr_expr proc_name out lval = match lval with
-  | PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
-  | PLoad(lval_prime) ->
-    Format.fprintf out "load(my_stack,";
-    dump_pc_lval out proc_name lval_prime;
-    Format.fprintf out ")"
-  | _ -> Format.fprintf out "Error: lval not treated"
+  | PAddr lval ->
+      (match lval with
+        | PLVar ptr -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
+        | PLoad lval' ->
+            Format.fprintf out "load(my_stack, ";
+            dump_pc_lval out proc_name lval';
+            Format.fprintf out ")"
+        (*We can not take Index or Field adress because they are not directly in the stack
+          but encapsulated in an array of record*)
+        | _ -> Format.fprintf out "Error: dump_pc_expr: Lval not treated in addr")
 
+
+(**
+  Outpust the PlusCal representation of an lvalue [lval] to the formatter [out].
+  @param out formatter to which the output is printed.
+  @param proc_name name of the procedure containing the lvalue.
+  @param lval PlusCal lvalue to be printed.
+**)
 and dump_pc_lval out (proc_name: string) (lval: pc_lval) = match lval with
-  |PLVar(ptr) -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
-  |PLoad(lval_prime) -> Format.fprintf out "load(my_stack,";dump_pc_lval out proc_name lval_prime;Format.fprintf out ")";
-  |PField(field,lval_prime) -> Format.fprintf out "load(my_stack,";dump_pc_lval out proc_name lval_prime;
-                               Format.fprintf out ")";Format.fprintf out ".%s" field;
-  |PIndex(idx,lval_prime) -> Format.fprintf out "load(my_stack,";
-                             dump_pc_lval out proc_name lval_prime;
-                             Format.fprintf out ")";
-                             Format.fprintf out "[";
-                            (dump_pc_expr proc_name out idx);
-                            Format.fprintf out "]"
+  |PLVar ptr -> Format.fprintf out "%s" (ptr_to_string proc_name ptr);
 
+  |PLoad lval' ->
+    Format.fprintf out "load(my_stack,";
+    dump_pc_lval out proc_name lval';
+    Format.fprintf out ")";
+
+  |PField (field,lval') ->
+    Format.fprintf out "load(my_stack,";
+    dump_pc_lval out proc_name lval';
+    Format.fprintf out ")";
+    Format.fprintf out ".%s" field;
+
+  |PIndex (idx,lval') ->
+    Format.fprintf out "load(my_stack,";
+    dump_pc_lval out proc_name lval';
+    Format.fprintf out ")";
+    Format.fprintf out "[";
+    dump_pc_expr proc_name out idx;
+    Format.fprintf out "]"
+
+
+(**
+  Converts a PlusCal expression [exp] into its string representation.
+  @param proc_name name of the procedure containing the expression.
+  @param exp PlusCal expression to be converted.
+  @return [String] representation of the PlusCal expression.
+
+  Useful in string_of_pc_lval
+**)
 and string_of_pc_expr (proc_name: string) (exp: pc_expr) : string =
     let buffer = Buffer.create 256 in
     let formatter = Format.formatter_of_buffer buffer in
@@ -153,136 +245,271 @@ and string_of_pc_expr (proc_name: string) (exp: pc_expr) : string =
     Format.pp_print_flush formatter ();
     Buffer.contents buffer
 
+(**
+  Converts a PlusCal lvalue to its string representation.
+  @param proc_name name of the procedure.
+  @param lval PlusCal lvalue to be converted.
+  @return [String] representation of the PlusCal l-value.
+
+  Useful in dump_pc_binop_ptr
+**)
 and string_of_pc_lval (proc_name: string) (lval: pc_lval) = match lval with
-  |PLVar(ptr) -> "load(my_stack,"^(ptr_to_string proc_name ptr)^")"
-  |PLoad(lval_prime) -> "load(my_stack,"^string_of_pc_lval proc_name lval_prime^")"
-  |PField(field,lval_prime) -> "load(my_stack,"^string_of_pc_lval proc_name lval_prime^")"^"."^field
-  |PIndex(idx,lval_prime) -> "load(my_stack,"^string_of_pc_lval proc_name lval_prime^")["^(string_of_pc_expr proc_name idx)^"]"
+  | PLVar ptr -> "load(my_stack," ^ (ptr_to_string proc_name ptr) ^ ")"
+  | PLoad lval' -> "load(my_stack," ^ string_of_pc_lval proc_name lval' ^ ")"
+  | PField (field,lval') -> "load(my_stack," ^ string_of_pc_lval proc_name lval' ^ ")"
+                                  ^ "." ^ field
+  | PIndex (idx,lval') -> "load(my_stack," ^ string_of_pc_lval proc_name lval' ^ ")["
+                                ^ (string_of_pc_expr proc_name idx) ^ "]"
 
-(* Our stack grows backward -> should invert arithmetic operations *)
-and dump_pc_binop_ptr out (proc_name: string) (b: pc_binop) (e1: pc_expr) (e2: pc_expr) =
-  (match e1 with
-    |PLval(lval) -> let ptr_string = string_of_pc_lval proc_name lval in
-                  (match b with
-                    | PAddPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs-" ptr_string ptr_string ptr_string;
-                                dump_pc_expr proc_name out e2; Format.fprintf out "]";
-                    | PSubPI -> Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+" ptr_string ptr_string ptr_string;
-                                dump_pc_expr proc_name out e2; Format.fprintf out "]";
-                    | PSubPP -> (match e2 with
-                                  |PLval(lval2) -> let ptr2_string = string_of_pc_lval proc_name lval2 in
-                                    Format.fprintf out "[loc |-> %s.loc, fp |-> %s.fp, offs |-> %s.offs+%s.offs]"
-                                    ptr_string ptr_string ptr_string ptr2_string;
-                                  |_ -> Format.fprintf out "Error: lval snd op expected")
-                    | _ -> Format.fprintf out "Error: lval fst op expected")
-    |_ -> Format.fprintf out "Error: lval operand expected")
 
-let rec dump_pc_instr_type out (info: dump_info) (i_type: pc_instr) =
-  let label,proc_name,line,indent = info in match i_type with
-  PStore(e,lval) -> (match lval with
-                      |PLVar(ptr) -> Format.fprintf out "store(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
-                      (* |PLPtr(ptr) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr);dump_pc_expr proc_name out e;Format.fprintf out ";\n"; *)
-                      |PLoad(lval_prime) -> Format.fprintf out "store(";dump_pc_expr proc_name out e;Format.fprintf out ",load(my_stack,";
-                                            dump_pc_lval out proc_name lval_prime;
-                                            Format.fprintf out "));\n";
-                      |PField(field,lval_prime) -> Format.fprintf out "store([load(my_stack,";
-                                                   dump_pc_lval out proc_name lval_prime;
-                                                   Format.fprintf out ") EXCEPT !.%s = " field;
-                                                   dump_pc_expr proc_name out e;
-                                                   Format.fprintf out "],";
-                                                   dump_pc_lval out proc_name lval_prime;
-                                                   Format.fprintf out ");\n";
-                      |PIndex(idx,lval_prime) -> Format.fprintf out "store([load(my_stack,";
-                                                 dump_pc_lval out proc_name lval_prime;
-                                                 Format.fprintf out ") EXCEPT ![";
-                                                 dump_pc_expr proc_name out idx;
-                                                 Format.fprintf out "] = ";
-                                                 dump_pc_expr proc_name out e;
-                                                 Format.fprintf out "],";
-                                                 dump_pc_lval out proc_name lval_prime;
-                                                 Format.fprintf out ");\n")
-  |PCall(fname,args) -> Format.fprintf out "call %s(" fname;dump_list out args (dump_pc_expr proc_name);Format.fprintf out ");\n";
-  |PIf(e,l1,l2) -> Format.fprintf out "if(";dump_pc_expr proc_name out e;Format.fprintf out ") then\n";
-                    (List.iteri (fun i -> dump_pc_instr out
-                      ((String.concat "" [label;(string_of_int i)]),proc_name,line,add_indent 1 indent)) l1);
-                    if List.length l2 > 0 then
-                      Format.fprintf out "%selse\n" indent;
-                      (List.iteri (fun i -> dump_pc_instr out
-                        ((String.concat "" [label;(string_of_int (List.length l1+i))]),proc_name,line,add_indent 1 indent)) l2);
-                    Format.fprintf out "%send if;\n" indent;
-  |PWhile(l,lbl) -> Format.fprintf out "while(TRUE) do\n";
-                            (List.iteri (fun i -> dump_pc_instr out
-                              ((String.concat "" [label;(string_of_int i)]),proc_name,line,add_indent 1 indent)) l);
-                    Format.fprintf out "%send while;\n" indent;
-                    Format.fprintf out "\n";
-                    Format.fprintf out "%s%s\n" indent lbl;
-                    Format.fprintf out "%sskip;\n" indent;
-  |PReturn(e) -> Format.fprintf out "push(ret, ";dump_pc_expr proc_name out e;Format.fprintf out ");\n";
-  |PDecl(e,ptr) -> Format.fprintf out "decl(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
-  |PCopy(e,ptr_dst) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr_dst);dump_pc_expr proc_name out e;Format.fprintf out ";\n";
-  |PPop -> Format.fprintf out "pop(my_stack);\n";
-  |PRetAttr(lval) -> (match lval with
-                      |PLVar(ptr) -> Format.fprintf out "attr_return(ret, %s);\n" (ptr_to_string proc_name ptr);
-                      (* |PLPtr(ptr) -> Format.fprintf out "attr_return_ptr(ret, %s);\n" (ptr_to_string proc_name ptr); *)
-                      |PLoad(lval_prime) -> Format.fprintf out "attr_return(ret, load(my_stack,";
-                                            dump_pc_lval out proc_name lval_prime;
-                                            Format.fprintf out "));\n";
-                      |PField(field,lval_prime) -> Format.fprintf out "store([load(my_stack,";
-                                                   dump_pc_lval out proc_name lval_prime;
-                                                   Format.fprintf out ") EXCEPT !.%s = Head(ret)]," field;
-                                                   dump_pc_lval out proc_name lval_prime;
-                                                   Format.fprintf out ");\n";
-                                                   Format.fprintf out "pop(ret);\n";
-                      |PIndex(idx,lval_prime) -> Format.fprintf out "store([load(my_stack,";
-                                                 dump_pc_lval out proc_name lval_prime;
-                                                 Format.fprintf out ") EXCEPT ![";
-                                                 dump_pc_expr proc_name out idx;
-                                                 Format.fprintf out "] = Head(ret)],";
-                                                 dump_pc_lval out proc_name lval_prime;
-                                                 Format.fprintf out ");\n")
-  |PGoto(lbl) -> Format.fprintf out "goto %s;\n" (remove_last_char lbl); (* lbl="label:", remove the ":"*)
-  |PLabel(_) -> Format.fprintf out "skip;\n";
-  |PInitDone -> Format.fprintf out "initDone := TRUE;\n"
-  |PAwaitInit -> Format.fprintf out "await initDone = TRUE;\n"
-  |PSkip -> Format.fprintf out "skip;"
-  |PInitArray(size,ptr) -> Format.fprintf out "call init_array(%d,%s);\n" size (ptr_to_string proc_name ptr)
+(**
+  Outputs PlusCal code for storing a value in a variable, field, or array index.
+  @param out formatter to output the generated code.
+  @param proc_name name of the procedure containing the store operation.
+  @param e expression representing the value to be stored.
+  @param lval left-hand side of the assignment, which can be a variable,
+              a field of a record, or an index of an array.
+**)
+let dump_pc_store out (proc_name: string) (e: pc_expr) (lval: pc_lval)= (match lval with
+    | PLVar ptr ->
+        Format.fprintf out "store(";
+        dump_pc_expr proc_name out e;
+        Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
 
-and dump_pc_instr out (info: dump_info) (i: pc_instr) =
-  let label,_,line,indent = info in
-  let lbl = match i with |PLabel(l) -> l |_ -> String.concat "" ["Line";(string_of_int line);"_";label;":"] in
-  Format.fprintf out "%s%s\n" indent lbl;
-  Format.fprintf out "%s" indent;dump_pc_instr_type out info i;
+    | PLoad lval' ->
+        Format.fprintf out "store(";
+        dump_pc_expr proc_name out e;
+        Format.fprintf out ",load(my_stack,";
+        dump_pc_lval out proc_name lval';
+        Format.fprintf out "));\n";
+
+    | PField (field,lval') ->
+        Format.fprintf out "store([load(my_stack,";
+        dump_pc_lval out proc_name lval';
+        Format.fprintf out ") EXCEPT !.%s = " field;
+        dump_pc_expr proc_name out e;
+        Format.fprintf out "],";
+        dump_pc_lval out proc_name lval';
+        Format.fprintf out ");\n";
+
+    | PIndex (idx,lval') ->
+        Format.fprintf out "store([load(my_stack,";
+        dump_pc_lval out proc_name lval';
+        Format.fprintf out ") EXCEPT ![";
+        dump_pc_expr proc_name out idx;
+        Format.fprintf out "] = ";
+        dump_pc_expr proc_name out e;
+        Format.fprintf out "],";
+        dump_pc_lval out proc_name lval';
+        Format.fprintf out ");\n")
+
+(**
+  Outputs PlusCal code for returning an attribute based to a given lvalue
+  to the output formatter [out].
+  @param out formatter to output the generated PlusCal code.
+  @param proc_name name of the procedure.
+  @param lval left-hand side of the assignment.
+**)
+let dump_pc_ret_attr out (proc_name: string) (lval: pc_lval) = (match lval with
+  | PLVar ptr -> Format.fprintf out "attr_return(ret, %s);\n" (ptr_to_string proc_name ptr);
+
+  | PLoad lval' ->
+      Format.fprintf out "attr_return(ret, load(my_stack,";
+      dump_pc_lval out proc_name lval';
+      Format.fprintf out "));\n";
+
+  | PField (field,lval') ->
+      Format.fprintf out "store([load(my_stack,";
+      dump_pc_lval out proc_name lval';
+      Format.fprintf out ") EXCEPT !.%s = Head(ret)]," field;
+      dump_pc_lval out proc_name lval';
+      Format.fprintf out ");\n";
+      Format.fprintf out "pop(ret);\n";
+
+  | PIndex (idx,lval') ->
+      Format.fprintf out "store([load(my_stack,";
+      dump_pc_lval out proc_name lval';
+      Format.fprintf out ") EXCEPT ![";
+      dump_pc_expr proc_name out idx;
+      Format.fprintf out "] = Head(ret)],";
+      dump_pc_lval out proc_name lval';
+      Format.fprintf out ");\n";
+      Format.fprintf out "pop(ret);\n";)
+
+(**
+  Recursively outputs PlusCal instructions to the given output formatter [out].
+  @param out formatter to output the dumped instructions.
+  @param info tuple containing the label, procedure name, line number, and indentation level.
+  @param instr PlusCal instruction to dump.
+
+  The function uses helper functions.
+**)
+let rec dump_pc_instr out (info: dump_info) (instr: pc_instr) =
+  let label, proc_name, line, indent = info in match instr with
+  | PStore (e,lval) -> dump_pc_store out proc_name e lval
+  | PRetAttr lval -> dump_pc_ret_attr out proc_name lval
+
+  | PIf (e,l1,l2) ->
+      Format.fprintf out "if(";
+      dump_pc_expr proc_name out e;
+      Format.fprintf out ") then\n";
+      (*Print block of instruction*)
+      (List.iteri (fun i -> dump_pc_label out
+        ((String.concat "" [label;(string_of_int i)]),proc_name,line,add_indent 1 indent)) l1
+      );
+
+      (*Print else if there is one*)
+      if List.length l2 > 0 then
+        Format.fprintf out "%selse\n" indent;
+        (List.iteri (fun i -> dump_pc_label out
+          ((String.concat "" [label;(string_of_int (List.length l1+i))]),proc_name,line,add_indent 1 indent)) l2
+        );
+      Format.fprintf out "%send if;\n" indent;
+
+  | PWhile (instrs,lbl) ->
+      Format.fprintf out "while(TRUE) do\n";
+      (List.iteri (fun i -> dump_pc_label out
+        ((String.concat "" [label;(string_of_int i)]),proc_name,line,add_indent 1 indent)) instrs
+      );
+      Format.fprintf out "%send while;\n" indent;
+      Format.fprintf out "\n";
+      Format.fprintf out "%s%s\n" indent lbl;
+      Format.fprintf out "%sskip;\n" indent;
+
+  | PCall (fname,args) -> Format.fprintf out "call %s(" fname;dump_list out args (dump_pc_expr proc_name);Format.fprintf out ");\n";
+  | PReturn e -> Format.fprintf out "push(ret, ";dump_pc_expr proc_name out e;Format.fprintf out ");\n";
+  | PDecl (e,ptr) -> Format.fprintf out "decl(";dump_pc_expr proc_name out e;Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
+  | PCopy (e,ptr_dst) -> Format.fprintf out "%s := " (ptr_to_string proc_name ptr_dst);dump_pc_expr proc_name out e;Format.fprintf out ";\n";
+  | PPop -> Format.fprintf out "pop(my_stack);\n";
+  | PGoto lbl -> Format.fprintf out "goto %s;\n" (remove_last_char lbl); (* lbl = "label:", remove the ":"*)
+  | PLabel _ -> Format.fprintf out "skip;\n"; (*Label are printed in dump_pc_label*)
+  | PInitDone -> Format.fprintf out "initDone := TRUE;\n"
+  | PAwaitInit -> Format.fprintf out "await initDone = TRUE;\n"
+  | PSkip -> Format.fprintf out "skip;"
+  | PInitArray (size,ptr) -> Format.fprintf out "call init_array(%d,%s);\n" size (ptr_to_string proc_name ptr)
+
+(**
+  Outputs a label for a PlusCal instruction [i] to the output formatter [out].
+  @param out formatter to print the label to.
+  @param info tuple containing the generated label string, procedure name (unused), the line number, and the indentation string.
+  @param i PlusCal instruction to print the label for.
+
+  The label is either a Frama-C label if present, or a generated label
+  based on the line number and a generated label string.
+**)
+and dump_pc_label out (info: dump_info) (i: pc_instr) =
+  let gen_label, _, line, indent = info in
+
+  (*Computed the label to print, frama-c label if there is one, or generated label*)
+  let printed_label = match i with
+    | PLabel label -> label
+    | _ -> String.concat "" ["Line";(string_of_int line);"_";gen_label;":"]
+  in
+
+  Format.fprintf out "%s%s\n" indent printed_label;
+  Format.fprintf out "%s" indent;
+  dump_pc_instr out info i;
   Format.fprintf out "\n"
 
+
+(**
+  Outputs the PlusCal procedure [proc] to the formatter [out].
+
+  @param out formatter to output the procedure to.
+  @param proc PlusCal procedure to be dumped.
+
+  The function performs the following steps:
+  - Outputs the procedure signature, including the procedure name and arguments.
+  - Outputs the variables section, including procedure arguments and local variables.
+  - Outputs the core of the procedure, including the procedure body and the return statement.
+**)
 let dump_pc_procedure out (proc: pc_procedure) =
-  Format.fprintf out "procedure %s(" proc.pc_procedure_name;dump_list out proc.pc_procedure_args (dump_arg proc.pc_procedure_name);Format.fprintf out ")\n";
+  (*Procedure signature*)
+  Format.fprintf out "procedure %s(" proc.pc_procedure_name;
+  dump_list out proc.pc_procedure_args (dump_arg proc.pc_procedure_name);
+  Format.fprintf out ")\n";
+
+  (*Variables section*)
   Format.fprintf out "variables\n";
   (List.iter (dump_proc_var out proc.pc_procedure_name) proc.pc_procedure_args);
   (List.iter (dump_proc_var out proc.pc_procedure_name) proc.pc_procedure_vars);
+
+  (*Core of the procedure*)
   Format.fprintf out "begin\n";
-  (List.iteri (fun i -> dump_pc_instr out (proc.pc_procedure_name,proc.pc_procedure_name,i,(string_of_indent 1))) proc.pc_procedure_body);
+  (List.iteri (fun i ->
+    dump_pc_label out (proc.pc_procedure_name, proc.pc_procedure_name, i, (string_of_indent 1)))
+  proc.pc_procedure_body);
   Format.fprintf out "    %s:\n" (String.concat "" ["End_";proc.pc_procedure_name]);
   Format.fprintf out "    return;\n";
   Format.fprintf out "end procedure;\n";
   Format.fprintf out "\n"
 
+
+(**
+  Outputs the PlusCal process [proc] to the formatter [out].
+  @param out formatter to output the process definition.
+  @param proc PlusCal process to be dumped, which includes the process name, set, variables, and body.
+
+  The function performs the following steps:
+  - Outputs the process header with the process name and set.
+  - Outputs the variables section.
+  - Outputs the core of the process, iterating over the process body and dumping each label.
+  - Outputs the process end statement.
+**)
 let dump_pc_process out (proc: pc_process) =
   Format.fprintf out "fair process %s \\in %s\n" proc.pc_process_name proc.pc_process_set;
+
+  (*Variables section*)
   Format.fprintf out "variables\n";
   Format.fprintf out "\n";
   (List.iter (dump_proc_var out proc.pc_process_name) proc.pc_process_vars);
+
+  (*Core of the process*)
   Format.fprintf out "begin\n";
-  (List.iteri (fun i -> dump_pc_instr out (proc.pc_process_name,proc.pc_process_name,i,(string_of_indent 1))) proc.pc_process_body);
+  (List.iteri (fun i -> dump_pc_label out (proc.pc_process_name,proc.pc_process_name,i,(string_of_indent 1))) proc.pc_process_body);
   Format.fprintf out "end process;\n"
 
-let dump_glob_var out ((gv_name): pc_var) =
+
+(**
+  Outputs the representation of a global variable to the given formatter.
+  @param out formatter to write the output to.
+  @param gv_name name of the global variable to be dumped.
+**)
+let dump_glob_var out (gv_name: pc_var) =
   Format.fprintf out "    %s = [loc |-> \"mem\", fp |-> 0, offs |-> 0];\n" (vname_to_string "glob" gv_name)
 
+(**
+  Outputs the string constant [cst] to the formatter [out].
+  @param out formatter to write the string constant to.
+  @param cst string constant to be written.
+
+  Useful as a function to fold on list
+**)
 let dump_constant out (cst: string) =
   Format.fprintf out "%s" cst
 
+
+(**
+  Outputs a PlusCal program [prog] to the given output formatter [out].
+
+  @param out output formatter where the program will be written.
+  @param prog PlusCal program to be dumped.
+
+  The function performs the following steps:
+  - Prints the module header with the program name.
+  - Prints the EXTENDS section with the necessary TLA+ modules.
+  - Prints the CONSTANT section with the constants used in the program.
+  - Prints the global variables section, including initialization of memory and temporary variables.
+  - Defines helper functions and macros for stack operations and memory management.
+  - Defines procedures for initializing arrays and stacks.
+  - Dumps the procedures and processes defined in the PlusCal program.
+  - Closes the algorithm block.
+**)
 let dump_prog out (prog: pc_prog) =
   Format.fprintf out "------------------------------ MODULE %s ------------------------------\n" prog.pc_prog_name;
   Format.fprintf out "EXTENDS Integers, FiniteSets, Sequences, Bitwise\n";
+
+  (*Constant section*)
   Format.fprintf out "CONSTANT ";
   dump_list out (List.map (fun proc -> proc.pc_process_set) prog.pc_processus) (dump_constant);
   Format.fprintf out ",UNDEF,\n";
@@ -290,6 +517,8 @@ let dump_prog out (prog: pc_prog) =
   dump_list out (List.map (fun (cst_name,_) -> cst_name) prog.pc_constants) (dump_constant);
   Format.fprintf out "\n";
   Format.fprintf out "\n";
+
+  (*Global variables*)
   Format.fprintf out "(*--algorithm %s\n" prog.pc_prog_name;
   Format.fprintf out "variables\n";
   Format.fprintf out "    mem = <<>>;\n";
@@ -298,12 +527,16 @@ let dump_prog out (prog: pc_prog) =
   Format.fprintf out "\n";
   List.iter (dump_glob_var out) (List.map (fun ((a,_),_) -> a) prog.pc_glob_var);
   Format.fprintf out "\n";
+
+  (*Define section*)
   Format.fprintf out "define\n";
   Format.fprintf out "    load(stk, ptr) == IF ptr.loc = \"stack\"\n";
   Format.fprintf out "                        THEN stk[Len(stk) - (ptr.fp + ptr.offs)]\n";
   Format.fprintf out "                        ELSE mem[Len(mem) - ptr.offs]\n";
   Format.fprintf out "end define;\n";
   Format.fprintf out "\n";
+
+  (*Macros and procedures useful for the PlusCal translation*)
   Format.fprintf out "macro push(my_stack, val) begin\n";
   Format.fprintf out "    my_stack := <<val>> \\o my_stack;\n";
   Format.fprintf out "end macro;\n";
@@ -358,7 +591,12 @@ let dump_prog out (prog: pc_prog) =
   Format.fprintf out "    return;\n";
   Format.fprintf out "end procedure;\n";
   Format.fprintf out "\n";
+
+  (*Procedures*)
   (List.iter (dump_pc_procedure out) (List.rev prog.pc_procedures));
+
+  (*Process*)
   (List.iter (dump_pc_process out) prog.pc_processus);
+
   Format.fprintf out "end algorithm; *)\n";
   Format.fprintf out "============================================================================="

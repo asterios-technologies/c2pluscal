@@ -12,7 +12,7 @@ open Pc
     - Dumps the configuration to a .cfg file.
     - If debugging is enabled, dumps additional debug information to a .dump file.
 
-    - @raise Sys_error if there is an error during file operations.
+    @raise [Sys_error] if there is an error during file operations.
 **)
 let run() =
     if Options.Enabled.get() then

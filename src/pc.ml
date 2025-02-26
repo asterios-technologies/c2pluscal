@@ -1,3 +1,7 @@
+(**
+    Type definitions for PlusCal (PC) IR
+**)
+
 (* Label of a line *)
 type pc_label = string
 (* Pointer: name and a flag indicating if it is global *)

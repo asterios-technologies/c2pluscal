@@ -7,9 +7,9 @@ open Config_utils
 
 (**
   Outputs the configuration of a PlusCal program [prog] to the formatter [out].
-  - @param out formatter to output the configuration to.
-  - @param prog PlusCal program whose configuration is being dumped.
-  - @return unit.
+  @param out formatter to output the configuration to.
+  @param prog PlusCal program whose configuration is being dumped.
+  @return unit.
 
   The configuration includes:
   - The constants section, where each process set is listed with an index.

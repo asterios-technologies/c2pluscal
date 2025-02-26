@@ -10,8 +10,8 @@ open Pc_utils
 
 (**
   Converts a unary operation to its corresponding PlusCal representation.
-  - @param unop unary operation to convert.
-  - @return [Result] containing the PlusCal unary operation or an error message.
+  @param unop unary operation to convert.
+  @return [Result] containing the PlusCal unary operation or an error message.
 **)
 let pc_of_unop = function
   | Neg -> PMinus
@@ -21,8 +21,8 @@ let pc_of_unop = function
 
 (**
   Converts a unary operation to its corresponding PlusCal representation.
-  - @param binop binary operation to convert.
-  - @return [Result] containing the PlusCal binary operation or an error message.
+  @param binop binary operation to convert.
+  @return [Result] containing the PlusCal binary operation or an error message.
 **)
 let pc_of_binop = function
   | PlusA -> PAdd | PlusPI -> PAddPI
@@ -37,8 +37,8 @@ let pc_of_binop = function
 
 (**
   Converts a constant to a PlusCal expression.
-    - @param cst constant to convert.
-    - @return [Result] containing the PlusCal constant or an error message.
+    @param cst constant to convert.
+    @return [Result] containing the PlusCal constant or an error message.
 
   The function does not handle the following cases :
     - [CWStr] : Wide character string
@@ -55,8 +55,8 @@ let pc_of_cst = function
 
 (**
   Recursively translates an expression into its PlusCal representation.
-  - @param exp expression to be translated.
-  - @return [Result] containing the PlusCal expression or an error message.
+  @param exp expression to be translated.
+  @return [Result] containing the PlusCal expression or an error message.
 
   The function does not handle the following cases :
     - [SizeOf]
@@ -110,8 +110,8 @@ let rec pc_of_exp = function
 (**
   Translates a memory access expression [e] into a PlusCal expression.
   It uses the [pc_of_exp] function to convert the expression node [e.enode] into a PlusCal expression.
-  - @param e expression to be translated.
-  - @return [Result] containing the translated PlusCal expression or an error message.
+  @param e expression to be translated.
+  @return [Result] containing the translated PlusCal expression or an error message.
 **)
 and pc_of_mec_access (e: exp) = Result.bind (pc_of_exp e.enode) (fun pc_exp_mem ->
   (match pc_exp_mem with
@@ -151,8 +151,8 @@ and pc_of_mec_access (e: exp) = Result.bind (pc_of_exp e.enode) (fun pc_exp_mem 
 (**
   Converts a left-hand value (lval) into a PlusCal representation.
   Different cases of lvals to handle are variables, fields, and indexed elements.
-  - @param lval lvalue to be translated.
-  - @return [Result] containing the translated PlusCal lvalue or an error message.
+  @param lval lvalue to be translated.
+  @return [Result] containing the translated PlusCal lvalue or an error message.
 **)
 and pc_of_lval = function
   (*Converts a lvalue with no offset into a PlusCal variable.*)
@@ -185,8 +185,8 @@ and pc_of_lval = function
 
 (**
   Converts an optional initialization expression to a PlusCal expression.
-  - @param i optional initialization expression of type [init option].
-  - @return [Result] containing the translated PlusCal initialization or an error message.
+  @param i optional initialization expression of type [init option].
+  @return [Result] containing the translated PlusCal initialization or an error message.
 **)
 let rec init_to_pc_expr (i: init option) =
   match i with
@@ -199,8 +199,8 @@ let rec init_to_pc_expr (i: init option) =
 
 (**
   Converts a complex initialization type (array, struct, etc) to a PlusCal expression.
-  - @param i initialization to be converted.
-  - @return [Result] containing the PlusCal initialization or an error message.
+  @param i initialization to be converted.
+  @return [Result] containing the PlusCal initialization or an error message.
 **)
 and complex_type_to_pc_expr (i: init) =
   match i with
@@ -209,8 +209,8 @@ and complex_type_to_pc_expr (i: init) =
 
 (**
   Handles the initialization of compound types (records or arrays).
-  - @param l list of tuples where each tuple consists of an offset and an initializer.
-  - @return [Result] containing parsed compound initializer or an error message.
+  @param l list of tuples where each tuple consists of an offset and an initializer.
+  @return [Result] containing parsed compound initializer or an error message.
 **)
 and handle_compound_init l =
   match List.length l with
@@ -224,12 +224,12 @@ and handle_compound_init l =
 
 (**
   @function handle_record_init
-  - @param l list of tuples where each tuple consists of a field offset and an initializer.
-  - @return [Result] containing parsed record initializer or an error message.
+  @param l list of tuples where each tuple consists of a field offset and an initializer.
+  @return [Result] containing parsed record initializer or an error message.
 
   @function handle_array_init
-  - @param l list of tuples where each tuple consists of an index offset and an initializer.
-  - @return [Result] containing parsed array initializer or an error message.
+  @param l list of tuples where each tuple consists of an index offset and an initializer.
+  @return [Result] containing parsed array initializer or an error message.
 **)
 and handle_record_init l =
   (*Result list of (string * pc_expr) to initialize the record*)
@@ -257,16 +257,16 @@ and handle_array_init l =
 (**
   Takes a list of expressions [l] and processes each expression
   It accumulates the Ok results in a list, starting with an empty list.
-  - @param l list of expressions to be processed.
-  - @return [Result] containing the list of processed expressions or an error if any expression fails to process.
+  @param l list of expressions to be processed.
+  @return [Result] containing the list of processed expressions or an error if any expression fails to process.
 *)
 let pc_of_exp_list l = fold_left_result (fun e -> pc_of_exp e.enode) (fun acc e -> acc@[e]) [] l
 
 
 (**
   Converts an instruction to a PlusCal representation.
-  - @param instr instruction to convert.
-  - @return [Result] containing a list of PlusCal instructions or an error message.
+  @param instr instruction to convert.
+  @return [Result] containing a list of PlusCal instructions or an error message.
 
   The function does not handle the following cases :
     - [Asm] : Assembly code
@@ -321,8 +321,8 @@ let pc_of_instr = function
 
 (**
   Recursively generates PlusCal code from a given statement.
-  - @param stmt statement to be converted to PlusCal code.
-  - @return tuple containing:
+  @param stmt statement to be converted to PlusCal code.
+  @return tuple containing:
     - [Result] type with a list of PlusCal instructions or an error message.
     - [Integer] representing the number of statements to skip after this one
       This is used not to handle statement already handle, for ex. after a Block
@@ -386,8 +386,8 @@ let rec pc_of_stmt = function
 
 (**
   Converts a block of statements [b] into a list of PlusCal statements.
-  - @param b block of statements to convert.
-  - @return [Result] containing the list of PlusCal statements or an error.
+  @param b block of statements to convert.
+  @return [Result] containing the list of PlusCal statements or an error.
 **)
 and pc_of_block b =
   (*Empty block*)
@@ -400,8 +400,8 @@ and pc_of_block b =
 
 (**
   Converts an enum item [e] to a pair of its name and integer value.
-  - @param e enum item to be converted.
-  - @return [Result] enum item has pair (name (str), value (int)) or an error constant value.
+  @param e enum item to be converted.
+  @return [Result] enum item has pair (name (str), value (int)) or an error constant value.
 **)
 let pc_constant_of_enum (e: enumitem) = match e.eival.enode with
     | Const(CInt64(i,_,_)) -> Result.ok (e.einame, Integer.to_int_exn i)
@@ -413,11 +413,11 @@ let pc_constant_of_enum (e: enumitem) = match e.eival.enode with
   Frama-C program. It inherits from [Visitor.frama_c_inplace], which allows it
   to traverse and manipulate the Frama-C AST in place.
 
-  - @param prog reference to a [pc_prog] object, which represents the PlusCal
+  @param prog reference to a [pc_prog] object, which represents the PlusCal
               program to be generated.
-  - @val child_to_skip reference to an integer that keeps track of the number
+  @val child_to_skip reference to an integer that keeps track of the number
                      of child nodes to skip during traversal.
-  - @val array_args_table reference to a hash table that stores information
+  @val array_args_table reference to a hash table that stores information
                         about array arguments, with an initial size of 100.
 **)
 class gen_pc (prog: pc_prog ref) = object
@@ -428,8 +428,8 @@ class gen_pc (prog: pc_prog ref) = object
 
   (*
     Processes a file in the PlusCal plugin.
-    - @param f file of the C code
-    - @return action to take after processing the file
+    @param f file of the C code
+    @return action to take after processing the file
 
     Updates the pc_prog by computing entry_point and name of the file
     Adds one main process to the pc_prog and one process that initializes global variable
@@ -477,8 +477,8 @@ class gen_pc (prog: pc_prog ref) = object
 
   (*
     Processes global declarations in the CIL AST and updates the program state accordingly.
-    - @param g global declaration to process.
-    - @return action to take after processing the global declaration.
+    @param g global declaration to process.
+    @return action to take after processing the global declaration.
 
     The method does not handle the following cases :
       - [GAsm] : global assembly code
@@ -568,8 +568,8 @@ class gen_pc (prog: pc_prog ref) = object
 
   (*
     Processes statements in the CIL AST and updates the program state accordingly.
-    - @param s statement to process.
-    - @return action to take after processing the statement.
+    @param s statement to process.
+    @return action to take after processing the statement.
   *)
   method! vstmt_aux s =
     (*Checks if there are statements to skip and skips them if so*)

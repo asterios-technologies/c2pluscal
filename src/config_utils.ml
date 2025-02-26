@@ -21,8 +21,8 @@ type entry = {
 
 (**
   Converts a JSON object into a configuration entry
-  - @param json JSON object to be converted.
-  - @return [entry] extracted from the JSON object.
+  @param json JSON object to be converted.
+  @return [entry] extracted from the JSON object.
 **)
 let entry_of_json json =
   {
@@ -35,10 +35,10 @@ let entry_of_json json =
 (**
   Parses a JSON file containing configuration entries.
   The JSON file is expected to contain a list of entries.
-  - @param filename path to the JSON file to be parsed.
-  - @return [entry List] parsed from the JSON file.
+  @param filename path to the JSON file to be parsed.
+  @return [entry List] parsed from the JSON file.
 
-  - @raise Failure if the JSON file does not contain a list of entries or if there is an error parsing the file.
+  @raise [Json_error] if the JSON file does not contain a list of entries or if there is an error parsing the file.
 **)
 let parse_expect_file filename =
   try
