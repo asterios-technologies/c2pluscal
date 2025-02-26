@@ -1,120 +1,138 @@
-int a = 0;
-int glob_arr[10];
+#include <stdio.h>
 
-struct error{
+// Global variables
+int global_var = 0;
+int global_array[10];
+
+struct Error {
    char* name;
    int id;
 };
 
-struct error error = {"test glob error", 1};
+struct Error global_error = {"test global error", 1};
 
-enum color { RED, GREEN, BLUE };
+enum Color { RED, GREEN, BLUE };
 
-int fact(int n) {
-    if(n==0) {
-        if(a==-1) {
+// Function to calculate factorial
+int factorial(int n) {
+    if (n == 0) {
+        if (global_var == -1) {
             return 0;
         }
         return 1;
+    } else {
+        global_var = 1;
     }
-
-    else {
-        a = 1;
-    }
-
-    return n*fact(n-1);
+    return n * factorial(n - 1);
 }
 
-int f(int x) {
+// Function to add 2 to a given number
+int add_two(int x) {
     int y = 2;
     x += y;
     return x;
 }
 
-void g(int* x) {
+// Function to modify a value through a pointer
+void modify_value(int* x) {
     *x = 3;
 
-    // z += 1
-    x += 1*sizeof(int);
+    x += 1;
     *x += 1;
-    // *(x+1*sizeof(int)) += 1;
     return;
 }
 
-void struct_fun(struct error* ptr) {
+// Function to modify a struct through a pointer
+void modify_struct(struct Error* ptr) {
     ptr->id = 2;
-
     return;
 }
 
-void arr_fun(int arr[]) {
+// Function to modify an array
+void modify_array(int arr[]) {
     arr[0] = 12;
     return;
 }
 
 int main() {
+    // Local variables
     int x = 2;
     int z;
     int b;
     int c;
+
     int i = 0;
     int d = 0;
     int k = 0;
     int t = 0;
 
-    int l = 2;
-    int r = 41;
-    int band = 13 & 11;
-    int bor = 13 | 11;
-    int bxor = 13 ^ 11;
-    int bnot = ~13;
+    struct Error local_error = {"test error", 3};
+    struct Error* error_ptr = &local_error;
 
-    int* ptr = &z;
-    int** ptr_ptr = &ptr;
+    int simple_array[5] = {1, 2, 3, 4, 5};
+    struct Error* ptr_array[1];
+    ptr_array[0] = error_ptr;
 
-    *ptr_ptr = &x;
-    k = **ptr_ptr;
+    // Test bitwise operations
+    int left_shift = 2 << 3;
+    int right_shift = 41 >> 2;
+    int bit_and = 13 & 11;
+    int bit_or = 13 | 11;
+    int bit_xor = 13 ^ 11;
+    int bit_not = ~13;
 
-    struct error error1 = {"test error", 3};
-    struct error* error_ptr = &error1;
+    // Test double dereferencing
+    int* ptr_to_z = &z;
+    int** ptr_to_ptr = &ptr_to_z;
+    *ptr_to_ptr = &x;
+    k = **ptr_to_ptr;
 
-    int simple_arr[5] = {1, 2, 3, 4, 5};
-    struct error* ptr_arr[1];
-    ptr_arr[0] = error_ptr;
+    // Test add_two function
+    z = add_two(x);
 
-    z = f(x);
-    g(&x);
-    b = fact(3);
-    a = 2;
+    // Test modify_value function
+    modify_value(&x);
 
-    enum color my_color = RED;
+    // Test factorial function
+    b = factorial(3);
 
+    // Test global variable modification
+    global_var = 2;
+
+    // Test enum and conditional statement
+    enum Color my_color = RED;
     if (my_color == RED) {
         my_color = BLUE;
     }
 
-    while(i < 6) {
+    // Test while loop
+    while (i < 6) {
         i += 1;
     }
 
-    for(int j=0; j<10; j++) {
+    // Test for loop
+    for (int j = 0; j < 10; j++) {
         d += i;
     }
 
+    // Test do-while loop
     do {
         i += 1;
-    } while(i < 10);
+    } while (i < 10);
 
-    struct_fun(error_ptr);
-    c = error1.id;
+    // Test modify_struct function
+    modify_struct(error_ptr);
+    c = local_error.id;
 
-    arr_fun(simple_arr);
-    glob_arr[5] = 1;
-    ptr_arr[0]->name = "test";
-    t = simple_arr[2];
+    // Test modify_array function
+    modify_array(simple_array);
 
-    l = l << 3;
-    r = r >> 2;
+    // Test global array modification
+    global_array[5] = 1;
+
+    // Test pointer array modification
+    ptr_array[0]->name = "test";
+    t = simple_array[2];
 
     return 0;
 }

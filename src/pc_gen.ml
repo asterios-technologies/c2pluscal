@@ -435,9 +435,9 @@ class gen_pc (prog: pc_prog ref) = object
     Adds one main process to the pc_prog and one process that initializes global variable
   *)
   method! vfile f =
-    let entry_point = get_entry_point f in
-    let name = get_file_name() in
-    let nb_process =  1 in
+    let entry_point = get_entry_point f and
+        name = get_file_name() and
+        nb_process =  1 in
     let processus = [{pc_process_name="proc";
                       pc_process_set="PROCESS";
                       pc_process_vars=[];
@@ -523,14 +523,14 @@ class gen_pc (prog: pc_prog ref) = object
           let proc_name = fundec.svar.vorig_name in
 
           (*Process args and local vars of the function*)
-          let args = List.map (varinfo_is_array) fundec.sformals in
-          let vars = List.map (varinfo_is_array) fundec.slocals in
+          let args = List.map (varinfo_is_array) fundec.sformals and
+              vars = List.map (varinfo_is_array) fundec.slocals in
 
           (*Declaration instructions of args and local vars of the function*)
           let (args_decl,nb_args_decl) = procedure_push_vars ([],0) args
               (true,(Hashtbl.find_all !array_args_table proc_name),(List.length args))
-          in
-          let (vars_decl,nb_vars_decl) = procedure_push_vars ([],0) vars (false,[],0) in
+          and
+              (vars_decl,nb_vars_decl) = procedure_push_vars ([],0) vars (false,[],0) in
 
           (*Pop instructions to put at the end of the function*)
           let pop_list = procedure_pop [] (nb_args_decl + nb_vars_decl) in

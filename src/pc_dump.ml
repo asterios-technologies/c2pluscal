@@ -4,6 +4,7 @@
 
 open Pc
 open Pc_utils
+open Invariants_utils
 
 (**
   Type representing information to be dumped.
@@ -146,16 +147,17 @@ and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
   | PCst cst -> dump_pc_cst proc_name out cst
 
   | PBinop (binop, e1, e2) ->
-      if is_binop_ptr binop then
-        (Format.fprintf out "(";
+      if is_binop_ptr binop then (
+        Format.fprintf out "(";
         dump_pc_binop_ptr out proc_name binop e1 e2;
-        Format.fprintf out ")")
-      else
+        Format.fprintf out ")"
+      ) else (
         Format.fprintf out "(";
         dump_pc_expr proc_name out e1;
         dump_pc_binop out binop;
         dump_pc_expr proc_name out e2;
         Format.fprintf out ")"
+      )
 
   | PUnop (unop, exp) ->
       Format.fprintf out "(";
@@ -599,4 +601,25 @@ let dump_prog out (prog: pc_prog) =
   (List.iter (dump_pc_process out) prog.pc_processus);
 
   Format.fprintf out "end algorithm; *)\n";
+
+  (*Dumps Invariant written in .expect file, if the options is given to Frama-C*)
+  let expect_file = Options.ExpectVal.get() in
+  if String.length expect_file > 0 then
+  Format.fprintf out "Inv == /\\ TRUE\n";
+  let expect_entries = parse_expect_file expect_file in
+    List.iter (
+      fun entry -> match entry with
+      (*Checks variable value at "Check" label of a procedure*)
+      | Ok Global (global_entry, (proc_check_name, proc_check_id)) ->
+          Format.fprintf out "       /\\ (pc[%i] = \"Check_%s\" => load(mem, %s_ptr_glob) = %s)\n"
+          proc_check_id proc_check_name global_entry.var_name global_entry.expected_val;
+
+      | Ok Local (local_entry, (proc_check_name, proc_check_id)) ->
+          Format.fprintf out "       /\\ (pc[%i] = \"Check_%s\" => load(my_stack[%i], %s_ptr_%s[%i]) = %s)\n"
+          proc_check_id proc_check_name local_entry.proc_id local_entry.var_name
+          local_entry.proc_name local_entry.proc_id local_entry.expected_val;
+
+      | Error e -> Format.fprintf out "%s" e)
+    expect_entries;
+
   Format.fprintf out "============================================================================="

@@ -3,7 +3,6 @@
 **)
 
 open Pc
-open Config_utils
 
 (**
   Outputs the configuration of a PlusCal program [prog] to the formatter [out].
@@ -44,14 +43,9 @@ let dump_config out (prog: pc_prog) =
   Format.fprintf out "\n";
   Format.fprintf out "\n";
 
-  (*Dumps Invariant in .expect file, if the options is given to Frama-C*)
+  (*Dumps Invariant, if the options is given to Frama-C*)
   Format.fprintf out "INVARIANT\n";
   let expect_file = Options.ExpectVal.get() in
   if String.length expect_file > 0 then
-    let expect_entries = Config_utils.parse_expect_file expect_file in
-    List.iter (
-      fun entry ->
-      (*Checks variable value at "Check" label of a procedure*)
-      Format.fprintf out "  (pc[%i] = \"Check_%s\" => load(my_stack[%i], %s_ptr_%s[%i]) = %s)\n" entry.proc_id entry.proc_name entry.proc_id entry.var_name entry.proc_name entry.proc_id entry.expect_val;)
-    expect_entries;
+    Format.fprintf out "  Inv\n";
   Format.fprintf out "\n";

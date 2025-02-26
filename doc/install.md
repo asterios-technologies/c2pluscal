@@ -1,6 +1,6 @@
 # 🛠️ Installation Guide
 
-This guide explains how to install and set up the **C to PlusCal Transpiler**.
+This guide explains how to install and set up the **C2PlusCal Transpiler**.
 
 ---
 
@@ -66,7 +66,8 @@ If the transpiler is correctly installed, you should see its options listed.
 
 ---
 
-## 🏁 Next Steps
+## 🏁 Other Docs
 
-- Learn how to **use the transpiler**: See [`usage.md`](./usage.md)
-- Understand the **translation process**: See [`doc/`](./architecture.md/)
+- **Overview** See [`overview.md`](./overview.md)
+- **Learn about the translation process:**: See [`translation.md`](./translation.md)
+- **See the limitations of the tool:** See [`limitations.md`](./limitations.md)

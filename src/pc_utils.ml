@@ -218,8 +218,8 @@ let remove_last_char s =
     when called in a function, then the variable will not be considerd as an array and will have [None] as array size.
 **)
 let rec procedure_push_vars acc (vars: (pc_var * int option) list) (args_info: (bool * int list * int))  =
-    let (is_args, array_args_idx, nb_args) = args_info in
-    let (decl_list, nb_decl) = acc in
+    let (is_args, array_args_idx, nb_args) = args_info and
+        (decl_list, nb_decl) = acc in
     match vars with
         | [] -> acc
 
