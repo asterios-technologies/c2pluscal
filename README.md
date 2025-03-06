@@ -1,6 +1,10 @@
 # C2PlusCal Transpiler
 
-🚀 **A transpiler that converts C programs into PlusCal specifications**
+![Language](https://img.shields.io/badge/Language-OCaml-f18d03)
+![Libraries](https://img.shields.io/badge/Libraries-FramaC-ff4001)
+![Open Source](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)
+
+❓ **A transpiler that converts C programs into PlusCal specifications**
 📌 *Language:* OCaml
 🔧 *Status:* Active development
 
@@ -52,8 +56,7 @@ to strengthen development processes and identify bugs earlier than would be poss
 
 ## License
 
-Developed as part of a five-month internship at Asterios Technologies, subsidiary of Safran Electronics and Defense
-LICENSE ?
-
+Developed as part of a five-month internship at Asterios Technologies, subsidiary of Safran Electronics and Defense.
+(LICENSE ?)
 
 📄 **Full documentation available in [`doc/`](./doc/)**.

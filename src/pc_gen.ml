@@ -223,11 +223,10 @@ and handle_compound_init l =
          )
 
 (**
-  @function handle_record_init
+  Handles the initialization of a record or an array.
   @param l list of tuples where each tuple consists of a field offset and an initializer.
   @return [Result] containing parsed record initializer or an error message.
 
-  @function handle_array_init
   @param l list of tuples where each tuple consists of an index offset and an initializer.
   @return [Result] containing parsed array initializer or an error message.
 **)
@@ -415,9 +414,11 @@ let pc_constant_of_enum (e: enumitem) = match e.eival.enode with
 
   @param prog reference to a [pc_prog] object, which represents the PlusCal
               program to be generated.
-  @val child_to_skip reference to an integer that keeps track of the number
+
+  Attributes :
+    child_to_skip reference to an integer that keeps track of the number
                      of child nodes to skip during traversal.
-  @val array_args_table reference to a hash table that stores information
+    array_args_table reference to a hash table that stores information
                         about array arguments, with an initial size of 100.
 **)
 class gen_pc (prog: pc_prog ref) = object

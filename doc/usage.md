@@ -1,4 +1,4 @@
-# 🚀 Usage Guide
+# ✍️ Usage Guide
 
 This guide explains how to use the **C2PlusCal Transpiler** to convert C programs into **PlusCal** specifications.
 
