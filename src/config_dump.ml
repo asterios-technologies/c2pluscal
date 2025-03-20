@@ -46,6 +46,7 @@ let dump_config out (prog: pc_prog) =
   (*Dumps Invariant, if the options is given to Frama-C*)
   Format.fprintf out "INVARIANT\n";
   let expect_file = Options.ExpectVal.get() in
-  if String.length expect_file > 0 then
-    Format.fprintf out "  Inv\n";
-  Format.fprintf out "\n";
+  if String.length expect_file > 0
+    then Format.fprintf out "  Inv\n"
+    else ();
+  Format.fprintf out "\n"

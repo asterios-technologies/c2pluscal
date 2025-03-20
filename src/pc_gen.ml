@@ -91,16 +91,9 @@ let rec pc_of_exp = function
   | StartOf lval ->
       (*[AddrOf] takes the address of an lvalue
         [StartOf] converts an array to a pointer when passed to a function.
-        Our PlusCal representation treats arrays as variables, so we treat [StartOf] as [AddrOf].
-
-        We have two cases :
-        1. Address of a variable.
-        2. Address from memory access, handled by an external function [mem_translate].*)
-      (match fst lval with
-        | Var vinfo -> Result.ok (PAddr (PLVar (vinfo.vorig_name, vinfo.vglob)))
-        | Mem e -> pc_of_mec_access e
-                   |> Result.map (fun pc_lval -> PAddr (pc_lval))
-      )
+        Our PlusCal representation treats arrays as variables, so we treat [StartOf] as [AddrOf].*)
+        pc_of_lval lval
+          |> Result.map (fun pc_lval -> PAddr (pc_lval))
 
   (*Cast of an expression*)
   | CastE(_,e) -> pc_of_exp e.enode
@@ -124,26 +117,20 @@ and pc_of_mec_access (e: exp) = Result.bind (pc_of_exp e.enode) (fun pc_exp_mem 
         - (pc_of_exp) -> PLVal(PLVar(x))
         - (pc_of_mec_access) -> PLoad(PLVal(PLVar(x)))
         - (pc_of_mec_access) -> PLoad(PLoad(PLVal(PLVar(x))))*)
-    | PLval (PLVar (ptr_info)) -> Result.ok (PLoad (PLVar (ptr_info)))
-    | PLval (PLoad (pc_lval)) -> Result.ok (PLoad (PLoad (pc_lval)))
-
-    (*Does not change access to a field or index, because our they are not stored in the stack as in C*)
-    | PLval (PField (field_info)) -> Result.ok (PField (field_info))
-    | PLval (PIndex (idx_info)) -> Result.ok (PIndex (idx_info))
+    | PLval lval -> Result.ok (PLoad lval)
 
     (* Converts a binary pointer operation to an index access *)
     (* Example : arr[2]
         - (pc_of_exp) -> PBinop(PAddPI, PLval(arr), PCst(2))
         - (pc_of_mec_access) -> PIndex(PCst(2), PLval(arr)) *)
     | PBinop (PAddPI, PLval (pc_lval), e2)
-    | PBinop (PSubPI, PLval (pc_lval), e2) ->
-      (*Add 1 to the index, because TLA sequences indexes begins at 1*)
-      let pc_exp = add_pc_cst e2 1 in Result.ok (PIndex (pc_exp, pc_lval))
+    | PBinop (PSubPI, PLval (pc_lval), e2) -> Result.ok (PIndex (e2, pc_lval))
 
     (*Example : arr[i]
         - (pc_of_exp) -> PBinop(PAddPI, PLval(arr), PLVal(i))
         - (pc_of_mec_access) -> PIndex(PLVal(i), PLVal(arr))*)
-    | PBinop (PSubPP, PLval (pc_lval), PLval (pc_lval2)) ->  Result.ok (PIndex (PLval (pc_lval2), pc_lval))
+    | PBinop (PSubPP, PLval (pc_lval), PLval (pc_lval2)) -> Result.ok (PIndex (PLval pc_lval2, pc_lval))
+
     | _ -> Result.error (Printf.sprintf "pc_of_mec_access: Memory access not treated: %s" (exp_to_str e.enode))
   ))
 
@@ -171,13 +158,9 @@ and pc_of_lval = function
   | Var vinfo, Index(e,_) ->
     pc_of_exp e.enode
     |> Result.map (fun pc_exp ->
-      (*Add 1 to the index, because TLA sequences indexes begins at 1*)
-      let pc_exp = add_pc_cst pc_exp 1 in
       PIndex (pc_exp, PLVar (vinfo.vorig_name, vinfo.vglob)))
   | Mem e, Index(e',_) ->
     Result.bind (pc_of_exp e'.enode) (fun pc_exp ->
-      (*Add 1 to the index, because TLA sequences indexes begins at 1*)
-      let pc_exp = add_pc_cst pc_exp 1 in
       pc_of_mec_access e
       |> Result.map (fun pc_lval ->
          PIndex (pc_exp, pc_lval)))

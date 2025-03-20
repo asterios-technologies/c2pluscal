@@ -20,11 +20,15 @@ Currently, the transpiler does not support:
 
 ## 🔍 Known Issues
 
-The following issues may affect the correctness of the translation:
+The following known issues may affect the correctness of the translation:
 
-- Address of a struct field or an array member is not fully supported.
-- Indexing with a variable (e.g., `arr[a]`) may behave unexpectedly because PlusCal sequences are starting from `1`.
-- Complex pointer dereferencing expressions such as `(*arr[i]->field)` may lead to incorrect translations.
+- Missing Frama-C labels in some `if` or `loop` statement, because of the way we skip `blocks` in `pc_gen.visit_stmt_aux`
+  -> Possible solution : keep a trace of all statements we visited to retrieve their labels and skip them when visiting,
+     instead of just skipping whole `blocks` contained in `if` and `loop` statements.
+- Frama-C labels may cause some duplicate
+  -> Possible solution : add `_line_n`, with `n` the line in the C code, to make labels unique.
+- Binop of pointers may be incorrect when pointer are of form `[ptr |-> ..., ref |-> ...]`.
+  -> See `pc_dump.dump_pc_binop_ptr`
 
 ---
 

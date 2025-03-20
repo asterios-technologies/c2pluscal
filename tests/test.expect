@@ -67,6 +67,12 @@
   },
   {
     "proc_to_check": ("main", 1),
+    "var_name": "local_error2",
+    "expected_val": "[name |-> \"new error\", id |-> 4]",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
     "var_name": "simple_array",
     "expected_val": "<<12,2,3,4,5>>",
     "proc_of_var": ("main", 1)
@@ -115,7 +121,7 @@
   {
     "proc_to_check": ("main", 1),
     "var_name": "global_array",
-    "expected_val": "<<UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,1,UNDEF,UNDEF,UNDEF,UNDEF>>"
+    "expected_val": "<<UNDEF,UNDEF,3,UNDEF,UNDEF,1,UNDEF,UNDEF,UNDEF,UNDEF>>"
   },
   {
     "proc_to_check": ("main", 1),

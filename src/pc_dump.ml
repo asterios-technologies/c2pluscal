@@ -62,7 +62,7 @@ let dump_pc_binop out (b: pc_binop) = match b with
   | PBand -> Format.fprintf out "&";
   | PBor -> Format.fprintf out "|";
   | PBxor -> Format.fprintf out "^^";
-  |_ -> Format.fprintf out "Error dump_pc_binop: non-ptr operation expected"
+  |_ -> Format.fprintf out "Error: dump_pc_binop: non-ptr operation expected"
 
 
 (**
@@ -170,38 +170,15 @@ and dump_pc_expr (proc_name: string) out (exp: pc_expr) = match exp with
     We need to load the value from PlusCal pointer
     representation of variables, before calling dump_pc_lval*)
   | PLval lval ->
-    (match lval with
-      | PLVar ptr -> Format.fprintf out "load(my_stack, %s)" (ptr_to_string proc_name ptr)
-      | PLoad lval' ->
-          Format.fprintf out "load(my_stack, load(my_stack, ";
-          dump_pc_lval out proc_name lval';
-          Format.fprintf out "))"
-      | PField (field, lval') ->
-          Format.fprintf out "load(my_stack, ";
-          dump_pc_lval out proc_name lval';
-          Format.fprintf out ").%s" field
-      | PIndex (idx, lval') ->
-          Format.fprintf out "load(my_stack, ";
-          dump_pc_lval out proc_name lval';
-          Format.fprintf out ")[";
-          dump_pc_expr proc_name out idx;
-          Format.fprintf out "]")
+      Format.fprintf out "load(my_stack, ";
+      dump_pc_lval out proc_name lval;
+      Format.fprintf out ")"
 
   | PArg v -> dump_arg proc_name out v
 
   | PUndef -> Format.fprintf out "UNDEF"
 
-  | PAddr lval ->
-      (match lval with
-        | PLVar ptr -> Format.fprintf out "%s" (ptr_to_string proc_name ptr)
-        | PLoad lval' ->
-            Format.fprintf out "load(my_stack, ";
-            dump_pc_lval out proc_name lval';
-            Format.fprintf out ")"
-        (*We can not take Index or Field adress because they are not directly in the stack
-          but encapsulated in an array of record*)
-        | _ -> Format.fprintf out "Error: dump_pc_expr: Lval not treated in addr")
-
+  | PAddr lval -> dump_pc_lval out proc_name lval;
 
 (**
   Outpust the PlusCal representation of an lvalue [lval] to the formatter [out].
@@ -217,19 +194,19 @@ and dump_pc_lval out (proc_name: string) (lval: pc_lval) = match lval with
     dump_pc_lval out proc_name lval';
     Format.fprintf out ")";
 
-  |PField (field,lval') ->
-    Format.fprintf out "load(my_stack,";
+  |PField (field, lval') ->
+    Format.fprintf out "[ptr |-> ";
     dump_pc_lval out proc_name lval';
-    Format.fprintf out ")";
-    Format.fprintf out ".%s" field;
+    Format.fprintf out ", ref |-> \"%s\"]" field;
 
-  |PIndex (idx,lval') ->
-    Format.fprintf out "load(my_stack,";
+  | PIndex (idx, lval') ->
+    (*Add 1 to the index, because TLA sequences indexes begins at 1*)
+    let idx_plus_one = add_pc_cst idx 1 in
+    Format.fprintf out "[ptr |-> ";
     dump_pc_lval out proc_name lval';
-    Format.fprintf out ")";
-    Format.fprintf out "[";
-    dump_pc_expr proc_name out idx;
-    Format.fprintf out "]"
+    Format.fprintf out ", ref |-> ";
+    dump_pc_expr proc_name out idx_plus_one;
+    Format.fprintf out "]";
 
 
 (**
@@ -260,83 +237,11 @@ and string_of_pc_lval (proc_name: string) (lval: pc_lval) = match lval with
   | PLoad lval' -> "load(my_stack," ^ string_of_pc_lval proc_name lval' ^ ")"
   | PField (field,lval') -> "load(my_stack," ^ string_of_pc_lval proc_name lval' ^ ")"
                                   ^ "." ^ field
-  | PIndex (idx,lval') -> "load(my_stack," ^ string_of_pc_lval proc_name lval' ^ ")["
-                                ^ (string_of_pc_expr proc_name idx) ^ "]"
-
-
-(**
-  Outputs PlusCal code for storing a value in a variable, field, or array index.
-  @param out formatter to output the generated code.
-  @param proc_name name of the procedure containing the store operation.
-  @param e expression representing the value to be stored.
-  @param lval left-hand side of the assignment, which can be a variable,
-              a field of a record, or an index of an array.
-**)
-let dump_pc_store out (proc_name: string) (e: pc_expr) (lval: pc_lval)= (match lval with
-    | PLVar ptr ->
-        Format.fprintf out "store(";
-        dump_pc_expr proc_name out e;
-        Format.fprintf out ",%s);\n" (ptr_to_string proc_name ptr);
-
-    | PLoad lval' ->
-        Format.fprintf out "store(";
-        dump_pc_expr proc_name out e;
-        Format.fprintf out ",load(my_stack,";
-        dump_pc_lval out proc_name lval';
-        Format.fprintf out "));\n";
-
-    | PField (field,lval') ->
-        Format.fprintf out "store([load(my_stack,";
-        dump_pc_lval out proc_name lval';
-        Format.fprintf out ") EXCEPT !.%s = " field;
-        dump_pc_expr proc_name out e;
-        Format.fprintf out "],";
-        dump_pc_lval out proc_name lval';
-        Format.fprintf out ");\n";
-
-    | PIndex (idx,lval') ->
-        Format.fprintf out "store([load(my_stack,";
-        dump_pc_lval out proc_name lval';
-        Format.fprintf out ") EXCEPT ![";
-        dump_pc_expr proc_name out idx;
-        Format.fprintf out "] = ";
-        dump_pc_expr proc_name out e;
-        Format.fprintf out "],";
-        dump_pc_lval out proc_name lval';
-        Format.fprintf out ");\n")
-
-(**
-  Outputs PlusCal code for returning an attribute based to a given lvalue
-  to the output formatter [out].
-  @param out formatter to output the generated PlusCal code.
-  @param proc_name name of the procedure.
-  @param lval left-hand side of the assignment.
-**)
-let dump_pc_ret_attr out (proc_name: string) (lval: pc_lval) = (match lval with
-  | PLVar ptr -> Format.fprintf out "attr_return(ret, %s);\n" (ptr_to_string proc_name ptr);
-
-  | PLoad lval' ->
-      Format.fprintf out "attr_return(ret, load(my_stack,";
-      dump_pc_lval out proc_name lval';
-      Format.fprintf out "));\n";
-
-  | PField (field,lval') ->
-      Format.fprintf out "store([load(my_stack,";
-      dump_pc_lval out proc_name lval';
-      Format.fprintf out ") EXCEPT !.%s = Head(ret)]," field;
-      dump_pc_lval out proc_name lval';
-      Format.fprintf out ");\n";
-      Format.fprintf out "pop(ret);\n";
-
   | PIndex (idx,lval') ->
-      Format.fprintf out "store([load(my_stack,";
-      dump_pc_lval out proc_name lval';
-      Format.fprintf out ") EXCEPT ![";
-      dump_pc_expr proc_name out idx;
-      Format.fprintf out "] = Head(ret)],";
-      dump_pc_lval out proc_name lval';
-      Format.fprintf out ");\n";
-      Format.fprintf out "pop(ret);\n";)
+    (*Add 1 to the index, because TLA sequences indexes begins at 1*)
+    let idx_plus_one = add_pc_cst idx 1 in
+      "load(my_stack," ^ string_of_pc_lval proc_name lval' ^ ")["
+            ^ (string_of_pc_expr proc_name idx_plus_one) ^ "]"
 
 (**
   Recursively outputs PlusCal instructions to the given output formatter [out].
@@ -348,8 +253,17 @@ let dump_pc_ret_attr out (proc_name: string) (lval: pc_lval) = (match lval with
 **)
 let rec dump_pc_instr out (info: dump_info) (instr: pc_instr) =
   let label, proc_name, line, indent = info in match instr with
-  | PStore (e,lval) -> dump_pc_store out proc_name e lval
-  | PRetAttr lval -> dump_pc_ret_attr out proc_name lval
+  | PStore (e,lval) ->
+      Format.fprintf out "store(";
+      dump_pc_expr proc_name out e;
+      Format.fprintf out ", ";
+      dump_pc_lval out proc_name lval;
+      Format.fprintf out ");\n"
+
+  | PRetAttr lval ->
+      Format.fprintf out "attr_return(ret, ";
+      dump_pc_lval out proc_name lval;
+      Format.fprintf out ");\n"
 
   | PIf (e,l1,l2) ->
       Format.fprintf out "if(";
@@ -532,9 +446,26 @@ let dump_prog out (prog: pc_prog) =
 
   (*Define section*)
   Format.fprintf out "define\n";
-  Format.fprintf out "    load(stk, ptr) == IF ptr.loc = \"stack\"\n";
-  Format.fprintf out "                        THEN stk[Len(stk) - (ptr.fp + ptr.offs)]\n";
-  Format.fprintf out "                        ELSE mem[Len(mem) - ptr.offs]\n";
+  Format.fprintf out "    RECURSIVE load(_,_)\n";
+  Format.fprintf out "    load(stk, ptr) == IF \"ptr\" \\in DOMAIN ptr THEN\n";
+  Format.fprintf out "                         load(stk, ptr.ptr)[ptr.ref]\n";
+  Format.fprintf out "                      ELSE\n";
+  Format.fprintf out "                         IF ptr.loc = \"stack\"\n";
+  Format.fprintf out "                         THEN stk[Len(stk) - (ptr.fp + ptr.offs)]\n";
+  Format.fprintf out "                         ELSE mem[Len(mem) - ptr.offs]\n";
+  Format.fprintf out "\n";
+  Format.fprintf out "    RECURSIVE idx_seq(_,_)\n";
+  Format.fprintf out "    idx_seq(stk, ptr) == IF \"ptr\" \\in DOMAIN ptr THEN\n";
+  Format.fprintf out "                         idx_seq(stk, ptr.ptr) \\o <<ptr.ref>>\n";
+  Format.fprintf out "                      ELSE\n";
+  Format.fprintf out "                         IF ptr.loc = \"stack\"\n";
+  Format.fprintf out "                         THEN <<\"stack\", Len(stk) - (ptr.fp + ptr.offs)>>\n";
+  Format.fprintf out "                         ELSE <<\"mem\", Len(mem) - ptr.offs>>\n";
+  Format.fprintf out "\n";
+  Format.fprintf out "    RECURSIVE update_stack(_,_,_)\n";
+  Format.fprintf out "    update_stack(stk, val, seq) == IF seq = <<>>\n";
+  Format.fprintf out "                                    THEN val\n";
+  Format.fprintf out "                                    ELSE [stk EXCEPT ![seq[1]] = update_stack(stk[seq[1]], val, Tail(seq))]\n";
   Format.fprintf out "end define;\n";
   Format.fprintf out "\n";
 
@@ -558,11 +489,12 @@ let dump_prog out (prog: pc_prog) =
   Format.fprintf out "end macro;\n";
   Format.fprintf out "\n";
   Format.fprintf out "macro store(val, ptr) begin\n";
-  Format.fprintf out "    if ptr.loc = \"stack\" then\n";
-  Format.fprintf out "        my_stack[Len(my_stack) - (ptr.fp + ptr.offs)] := val;\n";
-  Format.fprintf out "    else\n";
-  Format.fprintf out "        mem[Len(mem) - ptr.offs] := val;\n";
-  Format.fprintf out "    end if;\n";
+  Format.fprintf out "  with seq = idx_seq(my_stack, ptr) do\n";
+  Format.fprintf out "  if seq[1] = \"stack\"\n";
+  Format.fprintf out "    then my_stack := update_stack(my_stack, val, Tail(seq));\n";
+  Format.fprintf out "    else mem := update_stack(mem, val, Tail(seq));\n";
+  Format.fprintf out "  end if;\n";
+  Format.fprintf out "  end with;\n";
   Format.fprintf out "end macro;\n";
   Format.fprintf out "\n";
   Format.fprintf out "macro attr_return(ret, ptr) begin\n";
@@ -604,22 +536,23 @@ let dump_prog out (prog: pc_prog) =
 
   (*Dumps Invariant written in .expect file, if the options is given to Frama-C*)
   let expect_file = Options.ExpectVal.get() in
-  if String.length expect_file > 0 then
-  Format.fprintf out "Inv == /\\ TRUE\n";
-  let expect_entries = parse_expect_file expect_file in
+  if String.length expect_file > 0 then (
+    Format.fprintf out "Inv == /\\ TRUE\n";
+    let expect_entries = parse_expect_file expect_file in
     List.iter (
       fun entry -> match entry with
-      (*Checks variable value at "Check" label of a procedure*)
+      (* Checks variable value at "Check" label of a procedure *)
       | Ok Global (global_entry, (proc_check_name, proc_check_id)) ->
           Format.fprintf out "       /\\ (pc[%i] = \"Check_%s\" => load(mem, %s_ptr_glob) = %s)\n"
-          proc_check_id proc_check_name global_entry.var_name global_entry.expected_val;
+            proc_check_id proc_check_name global_entry.var_name global_entry.expected_val;
 
       | Ok Local (local_entry, (proc_check_name, proc_check_id)) ->
           Format.fprintf out "       /\\ (pc[%i] = \"Check_%s\" => load(my_stack[%i], %s_ptr_%s[%i]) = %s)\n"
-          proc_check_id proc_check_name local_entry.proc_id local_entry.var_name
-          local_entry.proc_name local_entry.proc_id local_entry.expected_val;
+            proc_check_id proc_check_name local_entry.proc_id local_entry.var_name
+            local_entry.proc_name local_entry.proc_id local_entry.expected_val;
 
-      | Error e -> Format.fprintf out "%s" e)
-    expect_entries;
+      | Error e -> Format.fprintf out "%s" e
+    ) expect_entries
+  ) else ();
 
   Format.fprintf out "============================================================================="

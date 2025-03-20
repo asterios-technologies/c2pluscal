@@ -42,6 +42,12 @@ The translation process follows a stack-based approach, functioning similarly to
   - `loc`: Memory location (`stack` or `mem` for global variables).
   - `fp`: Frame pointer (stack frame reference).
   - `offs`: Offset relative to the frame pointer.
+- For fields and index pointers, i.e. pointer to field of a struct, or indexed element of an array, we
+  use the following record :
+  - `ptr`: Pointer to the struct/field containing the element
+           It can be of the form above, or this one.
+  - `ref`: Field name or Index expression of the element
+
 
 ### 🚀 Program Initialization
 
@@ -64,6 +70,18 @@ The translation process follows a stack-based approach, functioning similarly to
 The transpiler uses macros to facilitate certain operations in PlusCal, ensuring a correct translation of C semantics.
 
 - `load(stk, ptr)`: Loads a pointer from a given stack (`mem` or `stack`).
+                    Acts recursively, because of possible pointer to field/index element, for which we need to load
+                    the pointer to the corresponding struct/array.
+- `idx_seq(stk, ptr)` : Retrieves a sequence indicating the position of the pointed element in the stack.
+                        The first element of the sequence is the stack where the element is stored.
+                        Ex : ptr = pointer_to_struct.field[index_of_elt]
+                => test(stk, ptr) = <<"stack", offs(pointer_to_struct), field, index_of_elt>>
+- `update_stack(stk, val, seq)` :
+               Gives `stk` updated with element at sequence `seq`, obtained with `test`, at `val`.
+                Ex : ptr = pointer_to_struct.field[index_of_elt]
+                     => store_tla(stk, val, ptr) = [my_stack EXCEPT ![offs(pointer_to_struct)][field][index_of_elt] = val]
+`idx_seq` and `update_stack` are used to handle recursively `store` operations in pointer of the form `[ptr |-> ..., ref |-> ...]`.
+
 - `push(my_stack, val)`: Pushes a value onto the top of a sequence (used as a stack).
 - `pop(my_stack)`: Pops the top value from a sequence.
 - `decl(val, ptr)`: Declares a pointer on a stack, initializing its offset correctly and assigning it the value `val`.

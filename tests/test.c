@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 // Global variables
 int global_var = 0;
 int global_array[10];
@@ -69,6 +67,9 @@ int main() {
     struct Error local_error = {"test error", 3};
     struct Error* error_ptr = &local_error;
 
+    struct Error local_error2 = {"test error 2", 4};
+    struct Error* error_ptr2 = &local_error2;
+
     int simple_array[5] = {1, 2, 3, 4, 5};
     struct Error* ptr_array[1];
     ptr_array[0] = error_ptr;
@@ -131,8 +132,15 @@ int main() {
     global_array[5] = 1;
 
     // Test pointer array modification
-    ptr_array[0]->name = "test";
+    ptr_array[global_array[5]-1]->name = "test";
     t = simple_array[2];
+
+    // Test pointer to struct field and array index
+    char** ptr_field = &(error_ptr2->name);
+    *ptr_field = "new error";
+
+    int* ptr_index = &(global_array[2]);
+    *ptr_index = 3;
 
     return 0;
 }

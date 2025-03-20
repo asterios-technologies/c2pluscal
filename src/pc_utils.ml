@@ -98,18 +98,13 @@ let is_binop_ptr (b: pc_binop) = match b with
     |_ -> false
 
 (**
-    Adds the integer [n] to the integer constant in an pc_expr [e].
+    Adds the integer [n] to a pc_expr [e].
 
     @param e [pc_expr] to which the integer [n] will be added.
     @param n integer to add to the constant within [e].
-    @return [pc_expr] with the integer [n] added to the constant, or the
-              original [e] if it is not a [PCst (PInt (i))].
+    @return [pc_expr] with the integer [n] added to the expression [e].
 **)
-let add_pc_cst (e: pc_expr) (n: int) =
-    match e with
-        | PCst (PInt (i)) -> PCst (PInt (i+n))
-        | _ -> e
-
+let add_pc_cst (e: pc_expr) (n: int) = PBinop (PAdd, e, PCst(PInt(n)))
 
 
 (******************)
