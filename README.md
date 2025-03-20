@@ -1,80 +1,62 @@
-# Transpiler C vers PlusCal
+# C2PlusCal Transpiler
 
-  Ce projet est un transpiler permettant de convertir un programme écrit en C vers une spécification **PlusCal**,
-  utilisé avec TLA+ pour spécifier et vérifier des modèles. Le processus génère également un fichier de configuration associé.
+![Language](https://img.shields.io/badge/Language-OCaml-f18d03)
+![Libraries](https://img.shields.io/badge/Libraries-FramaC-ff4001)
+![Open Source](https://badges.frapsoft.com/os/v2/open-source.svg?v=103)
 
-## Installation et Compilation
+❓ **A transpiler that converts C programs into PlusCal specifications**
+📌 *Language:* OCaml
+🔧 *Status:* Active development
 
-  Pour installer et compiler le transpiler, assurez-vous que vous avez `dune` et `frama-c` installés sur votre machine.
+Based on: [`C2TLA+ by Amira METHNI`](https://hal.science/hal-01314832/document)
 
-## Compilation
-  Placez vous dans le dossier `src/` et exécutez les commandes suivantes :
+## 📥 Installation
 
-  ```bash
-  dune build
-   ```
+Before starting, make sure you have **Frama-C** and **Dune** installed.
 
-  ```bash
-  dune install
-  ```
+### 🔨 Compilation
 
-## Options
+In the `src/` directory, run:
 
-  - `-debug-dump` : permet de générer un fichier `.dump` contenant des informations de debug sur la traduction
-  - `-check-label` : ajoute un label `"Check_funname"`, où `funname` correspond au nom d'une fonction du programme,
-                    juste avant la fin de cette fonction. Ce label permet d'insérer des propriétés ou des invariants
-                    sur les variables locales avant qu'elles ne soient supprimées de la pile, offrant ainsi un point de contrôle
-                    pour vérifier leur état avant la sortie de la fonction.
+```bash
+dune build
+dune install
+```
 
-## Utilisation
+## 🛠️ Options
 
-  Pour convertir un fichier `test.c` (un exemple est fourni dans le dossier `tests/`) C vers PlusCal,
-  avec l'ajout d'un label `"Check"` avant la fin de la fonction d'entrée,
-  utilisez la commande suivante avec Frama-C :
+- **`-debug-dump`**: Generates a `.dump` file containing debug information.
+- **`-check-label <funanme>`**:
+    Adds a `"Check_funname"` label before the end of specified functions, allowing
+    properties or invariants to be inserted on local variables before they are removed from the stack.
+    Can also be used with multiple functions : **`-check-label <fun1>,<fun2>`**
+- **`-expect <file.expect>`**: Generates invariants in the `.cfg` file with the expecting
+                                 value of variables of the program, written in the`.expect` file
 
-  ```bash
-  frama-c -pluscal -check "main" test.c
-  ```
+## 🚀 Usage
 
-  Les fichiers suivants seront générés :
-      test.tla : La spécification en PlusCal.
-      test.cfg : Le fichier de configuration.
+To transpile a file `test.c` into PlusCal with a `"Check"` label before the end of `main`:
 
-  ⚠️ Il faudra écrire les Invariants et Propriétés à la main en dessous de la traduction PlusCal, dans des prédicats respectifs,
-  `Inv` et `Prop`, par exemple pour vérifier que les variables du fichier `test.c` contiennent les valeurs attendues après éxecution,
-   on écrira :
-  ```
-    Inv ==  /\ (pc[1] = "Check_main" => load(my_stack[1], x_ptr_main[1]) = 3)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], z_ptr_main[1]) = 5)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], b_ptr_main[1]) = 6)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], c_ptr_main[1]) = 2)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], i_ptr_main[1]) = 10)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], d_ptr_main[1]) = 60)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], j_ptr_main[1]) = 10)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], k_ptr_main[1]) = 2)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], t_ptr_main[1]) = 3)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], my_color_ptr_main[1]) = BLUE)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], error1_ptr_main[1]) = [name |-> "test", id |-> 2])
-            /\ (pc[1] = "Check_main" => load(my_stack[1], simple_arr_ptr_main[1]) = <<12,2,3,4,5>>)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], l_ptr_main[1]) = 16)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], r_ptr_main[1]) = 10)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], band_ptr_main[1]) = 9)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], bor_ptr_main[1]) = 15)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], bxor_ptr_main[1]) = 6)
-            /\ (pc[1] = "Check_main" => load(my_stack[1], bnot_ptr_main[1]) = 2)
-            /\ (pc[1] = "Check_main" => load(mem, a_ptr_glob) = 2)
-            /\ (pc[1] = "Check_main" => load(mem, glob_arr_ptr_glob) = <<UNDEF,UNDEF,UNDEF,UNDEF,UNDEF,1,UNDEF,UNDEF,UNDEF,UNDEF>>)
-            /\ (pc[1] = "Check_main" => load(mem, error_ptr_glob) = [name |-> "test glob error", id |-> 1])
-  ```
-  Par exemple, `(pc[1] = "Check_main" => load(my_stack[1], x_ptr_main[1]) = 3)` vérifie que la valeur de la variable `x` est de 3,
-  juste avant le retour de `main`.
-  Les `[1]` présents sur les invariants, proviennent du fait que l'on vérifie les valeurs sur le processus d'ID `1`, on peut
-  ainsi vérifier les valeurs de variables de processus différents.
-    ⚠️ le processus d'ID `0` sert à initialisé les variables globales et n'est pas utilisé pour traduire le code C.
+```bash
+frama-c -pluscal -check "main" test.c
+```
 
-## Opérations non supportées
+🔹 This generates:
+- **`test.tla`**: The PlusCal specification.
+- **`test.cfg`**: The configuration file.
 
-  Pour le moment, le transpiler ne supporte pas les :
-      - Define
+⚠️ **Manual additions required**:
+      **Invariants** and **Properties** must be written after the translation, under the `Inv` and `Prop` predicates.
+      They can be automatically generated with the `-expect` option.
 
-  Mais ça ne saurait tarder :)
+## Results
+
+**Should be tested** on a certified micro-kernel, used in safety-critical airborne systems scheduler,
+to strengthen development processes and identify bugs earlier than would be possible with traditional testing campaigns.
+
+## License
+
+Developed as part of a five-month internship at Asterios Technologies, subsidiary of Safran Electronics and Defense.
+(LICENSE ?)
+
+📄 **Full documentation available in [`doc/`](./doc/)**.

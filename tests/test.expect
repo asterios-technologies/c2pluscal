@@ -1,0 +1,131 @@
+[
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "x",
+    "expected_val": "3",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "z",
+    "expected_val": "5",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "b",
+    "expected_val": "6",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "c",
+    "expected_val": "2",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "i",
+    "expected_val": "10",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "d",
+    "expected_val": "60",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "j",
+    "expected_val": "10",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "k",
+    "expected_val": "2",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "t",
+    "expected_val": "3",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "my_color",
+    "expected_val": "BLUE",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "local_error",
+    "expected_val": "[name |-> \"test\", id |-> 2]",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "local_error2",
+    "expected_val": "[name |-> \"new error\", id |-> 4]",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "simple_array",
+    "expected_val": "<<12,2,3,4,5>>",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "left_shift",
+    "expected_val": "16",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "right_shift",
+    "expected_val": "10",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "bit_and",
+    "expected_val": "9",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "bit_or",
+    "expected_val": "15",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "bit_xor",
+    "expected_val": "6",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "bit_not",
+    "expected_val": "2",
+    "proc_of_var": ("main", 1)
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "global_var",
+    "expected_val": "2"
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "global_array",
+    "expected_val": "<<UNDEF,UNDEF,3,UNDEF,UNDEF,1,UNDEF,UNDEF,UNDEF,UNDEF>>"
+  },
+  {
+    "proc_to_check": ("main", 1),
+    "var_name": "global_error",
+    "expected_val": "[name |-> \"test global error\", id |-> 1]"
+  }
+]

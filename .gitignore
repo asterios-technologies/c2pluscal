@@ -6,7 +6,6 @@
 *.out
 *.dot
 *.dump
-*.expect
 
 #Produced dirs
 states/

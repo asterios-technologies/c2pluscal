@@ -1,3 +1,7 @@
+(**
+    Dump a debug representation of a PlusCal program.
+**)
+
 open Pc
 
 let print_pc_var out ((n): pc_var) =
@@ -27,67 +31,66 @@ let print_pc_binop out (b: pc_binop) = match b with
   | PBxor -> Format.fprintf out "PBxor"
 
 let print_pc_unop out (u: pc_unop) = match u with
-  |PMinus -> Format.fprintf out "PMinus";
-  |PNot -> Format.fprintf out "PNot"
-  |PBnot -> Format.fprintf out "PBnot"
+  | PMinus -> Format.fprintf out "PMinus";
+  | PNot -> Format.fprintf out "PNot"
+  | PBnot -> Format.fprintf out "PBnot"
 
 let rec print_pc_cst out (c: pc_cst) = match c with
-  |PInt(i) -> Format.fprintf out "PInt(%s)" (string_of_int i);
-  |PString(s) -> Format.fprintf out "PString(%s)" s
-  |PRecord(l) -> Format.fprintf out "PRecord(";
+  | PInt(i) -> Format.fprintf out "PInt(%s)" (string_of_int i);
+  | PString(s) -> Format.fprintf out "PString(%s)" s
+  | PRecord(l) -> Format.fprintf out "PRecord(";
                  List.iter (fun (s,pc_exp) ->
                   Format.fprintf out "%s : " s;
                   print_pc_expr out pc_exp;
                   Format.fprintf out ",") l;
                 Format.fprintf out ")";
-  |PArray(l) -> Format.fprintf out "PArray(";
-                List.iter (fun (_,pc_exp) ->
+  | PArray(l) -> Format.fprintf out "PArray(";
+                List.iter (fun pc_exp ->
                  print_pc_expr out pc_exp;
                  Format.fprintf out ",") l;
                Format.fprintf out ")";
-  |PEnumItem(item_name) -> Format.fprintf out "PEnumItem(%s)" item_name
+  | PEnumItem(item_name) -> Format.fprintf out "PEnumItem(%s)" item_name
 
 and print_pc_lval out (lval: pc_lval) = match lval with
-PLVar(ptr,_) -> Format.fprintf out "%s" ptr;
-(* |PLPtr(ptr,_) -> Format.fprintf out "%s" ptr; *)
-|PLoad(lval_prime) -> Format.fprintf out "load(";print_pc_lval out lval_prime;Format.fprintf out ")";
-|PField(field,lval_prime) -> print_pc_lval out lval_prime; Format.fprintf out ".%s" field;
-|PIndex(idx,lval_prime) -> print_pc_lval out lval_prime; Format.fprintf out "["; print_pc_expr out idx; Format.fprintf out "]"
+  | PLVar(ptr,_) -> Format.fprintf out "%s" ptr;
+  | PLoad(lval') -> Format.fprintf out "load(";print_pc_lval out lval';Format.fprintf out ")";
+  | PField(field,lval') -> print_pc_lval out lval'; Format.fprintf out ".%s" field;
+  | PIndex(idx,lval') -> print_pc_lval out lval'; Format.fprintf out "["; print_pc_expr out idx; Format.fprintf out "]"
 
 and print_pc_expr out (exp: pc_expr) = match exp with
-  PCst(cst) -> Format.fprintf out "PCst(";print_pc_cst out cst;Format.fprintf out ")";
-  |PBinop(binop,e1,e2) -> Format.fprintf out "PBinop(";print_pc_binop out binop;
+  | PCst(cst) -> Format.fprintf out "PCst(";print_pc_cst out cst;Format.fprintf out ")";
+  | PBinop(binop,e1,e2) -> Format.fprintf out "PBinop(";print_pc_binop out binop;
                           Format.fprintf out ",";print_pc_expr out e1;
                           Format.fprintf out ",";print_pc_expr out e2;Format.fprintf out ")";
-  |PUnop(unop,exp) -> Format.fprintf out "PUnop(";print_pc_unop out unop;
+  | PUnop(unop,exp) -> Format.fprintf out "PUnop(";print_pc_unop out unop;
                       Format.fprintf out ",";print_pc_expr out exp;Format.fprintf out ")";
-  |PUndef -> Format.fprintf out "PUndef";
-  |PLval(lval) -> Format.fprintf out "PLoad(PLVal(";print_pc_lval out lval;
+  | PUndef -> Format.fprintf out "PUndef";
+  | PLval(lval) -> Format.fprintf out "PLoad(PLVal(";print_pc_lval out lval;
                   Format.fprintf out ")";Format.fprintf out ")";
-  |PArg((vname)) -> Format.fprintf out "PArg(%s)" vname;
-  |PAddr(lval) -> Format.fprintf out "PAddr(";print_pc_lval out lval;Format.fprintf out ")"
+  | PArg((vname)) -> Format.fprintf out "PArg(%s)" vname;
+  | PAddr(lval) -> Format.fprintf out "PAddr(";print_pc_lval out lval;Format.fprintf out ")"
 
 let rec print_pc_instr_type out (i_type: pc_instr) = match i_type with
-  PStore(e,lval) -> Format.fprintf out "PStore(";print_pc_expr out e;Format.fprintf out ",PLVal(";print_pc_lval out lval;
+  | PStore(e,lval) -> Format.fprintf out "PStore(";print_pc_expr out e;Format.fprintf out ",PLVal(";print_pc_lval out lval;
                     Format.fprintf out ")";Format.fprintf out ")";
-  |PCall(fname,args) -> Format.fprintf out "PCall(%s," fname; (List.iter (print_pc_expr out) args);Format.fprintf out ")";
-  |PIf(e, l1, l2) -> Format.fprintf out "PIf(";print_pc_expr out e;Format.fprintf out ",";
+  | PCall(fname,args) -> Format.fprintf out "PCall(%s," fname; (List.iter (print_pc_expr out) args);Format.fprintf out ")";
+  | PIf(e, l1, l2) -> Format.fprintf out "PIf(";print_pc_expr out e;Format.fprintf out ",";
                      (List.iter (print_pc_instr out) l1);Format.fprintf out ",";
                      (List.iter (print_pc_instr out) l2);Format.fprintf out ")";
-  |PWhile(l,break_lbl) -> Format.fprintf out "PWhile(";(List.iter (print_pc_instr out) l);Format.fprintf out ";";
+  | PWhile(l,break_lbl) -> Format.fprintf out "PWhile(";(List.iter (print_pc_instr out) l);Format.fprintf out ";";
                           Format.fprintf out "%s)" break_lbl;
-  |PReturn(e) -> Format.fprintf out "PReturn(";print_pc_expr out e;Format.fprintf out ")";
-  |PDecl(e,(ptr,_)) -> Format.fprintf out "PDecl(";print_pc_expr out e;Format.fprintf out ",%s)" ptr;
-  |PCopy(e,(ptr_dst,_)) -> Format.fprintf out "PCopy(";print_pc_expr out e;Format.fprintf out ",%s)" ptr_dst;
-  |PPop -> Format.fprintf out "PPop()";
-  |PRetAttr(lval) -> Format.fprintf out "PRetAttr(PLVal(";print_pc_lval out lval;
+  | PReturn(e) -> Format.fprintf out "PReturn(";print_pc_expr out e;Format.fprintf out ")";
+  | PDecl(e,(ptr,_)) -> Format.fprintf out "PDecl(";print_pc_expr out e;Format.fprintf out ",%s)" ptr;
+  | PCopy(e,(ptr_dst,_)) -> Format.fprintf out "PCopy(";print_pc_expr out e;Format.fprintf out ",%s)" ptr_dst;
+  | PPop -> Format.fprintf out "PPop()";
+  | PRetAttr(lval) -> Format.fprintf out "PRetAttr(PLVal(";print_pc_lval out lval;
                      Format.fprintf out ")";Format.fprintf out ")";
-  |PGoto(lbl) -> Format.fprintf out "PGoto(%s)" lbl;
-  |PLabel(lbl) -> Format.fprintf out "PStmt(%s)" lbl;
-  |PInitDone -> Format.fprintf out "PInitDone";
-  |PAwaitInit -> Format.fprintf out "PAwaitInit"
-  |PSkip -> Format.fprintf out "PSkip"
-  |PInitArray(size,(ptr,_)) -> Format.fprintf out "PInitArray(%d,%s)" size ptr
+  | PGoto(lbl) -> Format.fprintf out "PGoto(%s)" lbl;
+  | PLabel(lbl) -> Format.fprintf out "PStmt(%s)" lbl;
+  | PInitDone -> Format.fprintf out "PInitDone";
+  | PAwaitInit -> Format.fprintf out "PAwaitInit"
+  | PSkip -> Format.fprintf out "PSkip"
+  | PInitArray(size,(ptr,_)) -> Format.fprintf out "PInitArray(%d,%s)" size ptr
 
 
 and print_pc_instr out (i: pc_instr) =
