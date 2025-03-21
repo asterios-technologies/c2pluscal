@@ -59,7 +59,7 @@ dune install
 To ensure everything is correctly set up, run:
 
 ```bash
-frama-c -help | grep pluscal
+frama-c -pluscal-h
 ```
 
 If the transpiler is correctly installed, you should see its options listed.
