@@ -1,5 +1,5 @@
 (**
-    Dump the configuration of a PlusCal program.
+    Dump the configuration file (.cfg) of a PlusCal specification.
 **)
 
 open Pc
@@ -15,7 +15,8 @@ open Pc
   - The constants section again, listing each constant name and its value.
   - The specification section.
   - The property section.
-  - The invariant section, which includes expected values from a file if specified in the options.
+  - The invariant section, which includes expected values from a file if
+    specified in the options.
 *)
 let dump_config out (prog: pc_prog) =
   Format.fprintf out "CONSTANTS\n";
@@ -26,11 +27,10 @@ let dump_config out (prog: pc_prog) =
     (string_of_int i))
   prog.pc_processus);
   Format.fprintf out "  UNDEF = UNDEF\n";
-  Format.fprintf out "  defaultInitValue = 0\n";
-  Format.fprintf out "\n";
+  Format.fprintf out "  defaultInitValue = 0\n\n";
 
   Format.fprintf out "CONSTANTS\n";
-  (*Dumps TLA constant of the program*)
+  (* Dumps TLA+ constant of the program *)
   (List.iter (
     fun (cst_name, cst_val) ->
     Format.fprintf out "  %s = %i\n" cst_name cst_val)
@@ -43,10 +43,10 @@ let dump_config out (prog: pc_prog) =
   Format.fprintf out "\n";
   Format.fprintf out "\n";
 
-  (*Dumps Invariant, if the options is given to Frama-C*)
+  (* Dumps Invariant, if the options is given to the plugin *)
   Format.fprintf out "INVARIANT\n";
   let expect_file = Options.ExpectVal.get() in
   if String.length expect_file > 0
-    then Format.fprintf out "  Inv\n"
-    else ();
+  then Format.fprintf out "  Inv\n"
+  else ();
   Format.fprintf out "\n"

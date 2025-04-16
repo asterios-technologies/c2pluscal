@@ -1,0 +1,9 @@
+{
+  "dir": "tests/basic/result",
+  "info": "TEST #0 OF TEST FILE tests/basic/test_enums.c",
+  "cmd": "frama-c -check -no-autoload-plugins -add-symbolic-path=\"/home/amira/dev/c2pluscal/_build/default:.\" -load-plugin=pluscal    test_enums.c -pluscal  > \"test_enums.res.log\" 2> \"test_enums.err.log\"",
+  "out": "test_enums.res.log",
+  "err": "test_enums.err.log",
+  "oracle_out": "../oracle/test_enums.res.oracle",
+  "oracle_err": "../oracle/test_enums.err.oracle"
+}

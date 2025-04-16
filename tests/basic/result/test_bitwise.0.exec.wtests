@@ -1,0 +1,9 @@
+{
+  "dir": "tests/basic/result",
+  "info": "TEST #0 OF TEST FILE tests/basic/test_bitwise.c",
+  "cmd": "frama-c -check -no-autoload-plugins -add-symbolic-path=\"/home/amira/dev/c2pluscal/_build/default:.\" -load-plugin=pluscal    test_bitwise.c -pluscal  > \"test_bitwise.res.log\" 2> \"test_bitwise.err.log\"",
+  "out": "test_bitwise.res.log",
+  "err": "test_bitwise.err.log",
+  "oracle_out": "../oracle/test_bitwise.res.oracle",
+  "oracle_err": "../oracle/test_bitwise.err.oracle"
+}

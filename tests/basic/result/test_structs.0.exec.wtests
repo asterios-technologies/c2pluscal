@@ -1,0 +1,9 @@
+{
+  "dir": "tests/basic/result",
+  "info": "TEST #0 OF TEST FILE tests/basic/test_structs.c",
+  "cmd": "frama-c -check -no-autoload-plugins -add-symbolic-path=\"/home/amira/dev/c2pluscal/_build/default:.\" -load-plugin=pluscal    test_structs.c -pluscal  > \"test_structs.res.log\" 2> \"test_structs.err.log\"",
+  "out": "test_structs.res.log",
+  "err": "test_structs.err.log",
+  "oracle_out": "../oracle/test_structs.res.oracle",
+  "oracle_err": "../oracle/test_structs.err.oracle"
+}

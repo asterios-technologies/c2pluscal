@@ -1,5 +1,4 @@
-
-#Produced files
+# Produced files
 *.cfg
 *.old
 *.tla
@@ -7,6 +6,6 @@
 *.dot
 *.dump
 
-#Produced dirs
+# Produced dirs
 states/
 _build/

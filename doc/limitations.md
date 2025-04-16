@@ -15,7 +15,8 @@ Currently, the transpiler does not support:
 - `throw`
 - `switch` statements
 - `continue` statements
-- Multi-threading (only a single process is supported, but multi-process support is planned)
+- Multi-threading (only a single process is supported, but multi-process
+  support is planned)
 - Generation of TypeOK verification
 
 ## 🔍 Known Issues

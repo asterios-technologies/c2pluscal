@@ -1,6 +1,7 @@
 # ✍️ Usage Guide
 
-This guide explains how to use the **C2PlusCal Transpiler** to convert C programs into **PlusCal** specifications.
+This guide explains how to use the **C2PlusCal Transpiler** to convert C
+programs into **PlusCal** specifications.
 
 ---
 
@@ -9,7 +10,7 @@ This guide explains how to use the **C2PlusCal Transpiler** to convert C program
 To transpile a C program (`test.c`) into PlusCal, run:
 
 ```bash
-frama-c -pluscal test.c
+frama-c -pluscal tests/test.c
 ```
 
 This generates two output files:
@@ -36,7 +37,7 @@ This allows writing properties and invariants on local variables before they are
 Example:
 
 ```bash
-frama-c -pluscal -check-label "main" test.c
+frama-c -pluscal -check-label "main" tests/test.c
 ```
 
 ### 🔹 `-expect <file>`
@@ -45,7 +46,7 @@ Generates invariants in the `.cfg` file with the expecting value of variables of
 Example:
 
 ```bash
-frama-c -pluscal -expect "test.expect" test.c
+frama-c -pluscal -expect test.expect tests/test.c
 ```
 
 An example of `.expect` file is given in `tests/test.expect`.

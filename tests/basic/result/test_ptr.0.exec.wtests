@@ -1,0 +1,9 @@
+{
+  "dir": "tests/basic/result",
+  "info": "TEST #0 OF TEST FILE tests/basic/test_ptr.c",
+  "cmd": "frama-c -check -no-autoload-plugins -add-symbolic-path=\"/home/amira/dev/c2pluscal/_build/default:.\" -load-plugin=pluscal    test_ptr.c -pluscal  > \"test_ptr.res.log\" 2> \"test_ptr.err.log\"",
+  "out": "test_ptr.res.log",
+  "err": "test_ptr.err.log",
+  "oracle_out": "../oracle/test_ptr.res.oracle",
+  "oracle_err": "../oracle/test_ptr.err.oracle"
+}
