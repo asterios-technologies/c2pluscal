@@ -115,11 +115,12 @@ started:
 
 C2PlusCal was developed was developed by [Guillaume Di Fatta][5] as part of a five-month internship at [Asterios Technologies][3], subsidiary of Safran Electronics and Defense. The original idea behind C2PlusCal was to strengthen verification processes of embedded safety-critical software written in C, used in airborne systems.
 
-For more information, see the presentation at [TLA+ Community Event 2025][4] *(link coming soon 😉)*
+For more information, see the presentation ***Translating C to PlusCal for Model Checking of Safety Properties on Source Code*** at [TLA+ Community Event 2025][4]:
+[[📄 Slides][10] ] | [[📹 Video][11] ] | [[❔ Q&A][12] ]
 
 ## License
 
-Apalache License 2.0—see [LICENSE](./LICENSE) file.
+Apache License 2.0—see [LICENSE](./LICENSE) file.
 
 [1]: https://frama-c.com/
 [2]: https://ocaml.org
@@ -130,3 +131,6 @@ Apalache License 2.0—see [LICENSE](./LICENSE) file.
 [7]: https://fr.wikipedia.org/wiki/Leslie_Lamport
 [8]: https://learntla.com
 [9]: https://github.com/tlaplus/CommunityModules
+[10]: https://conf.tlapl.us/2025-etaps/di-fatta-slides.pdf
+[11]: https://youtu.be/0A5qMWvFgdI
+[12]: https://youtu.be/NgYIS02EUnI
